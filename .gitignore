@@ -15,6 +15,7 @@ apps/api/src/generated/
 .env.local
 .env.*.local
 apps/api/.env
+apps/web/.env
 apps/web/.env.local
 
 # Uploads & runtime data

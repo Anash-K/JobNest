@@ -25,7 +25,7 @@ pnpm install
 
 # 2. Configure environment
 cp apps/api/.env.example apps/api/.env
-cp apps/web/.env.example apps/web/.env.local
+cp apps/web/.env.example apps/web/.env
 ```
 
 Edit `apps/api/.env` and set your **Neon pooled connection string**:
@@ -36,7 +36,9 @@ DATABASE_URL=postgresql://USER:PASSWORD@ep-xxx-pooler.region.aws.neon.tech/neond
 
 Use the **pooled** endpoint from the Neon dashboard (hostname contains `-pooler`). SSL is required (`sslmode=require`).
 
-Fill in the remaining required variables (`BETTER_AUTH_SECRET`, `ENCRYPTION_KEY`, `GOOGLE_*`, etc.) — see `apps/api/.env.example`.
+Fill in the remaining required API variables (`BETTER_AUTH_SECRET`, `ENCRYPTION_KEY`, `GOOGLE_*`, etc.) — see `apps/api/.env.example`.
+
+For the web app, defaults in `apps/web/.env` point at the local API (`http://localhost:4000`). Change them only if your API runs elsewhere — see `apps/web/.env.example`.
 
 ```bash
 # 3. Generate Prisma client & apply migrations to Neon
@@ -100,3 +102,27 @@ jobhunter/
 | `pnpm db:studio` | Open Prisma Studio |
 
 See [docs/IMPLEMENTATION.md](docs/IMPLEMENTATION.md) for the full roadmap.
+
+## Deploy frontend (Vercel)
+
+Root Directory: **`apps/web`**
+
+| Setting | Value |
+|---|---|
+| Framework | Next.js |
+| Install Command | `cd ../.. && pnpm install --frozen-lockfile` |
+| Build Command | `pnpm run build` |
+| Output Directory | *(default — leave empty)* |
+| Node.js Version | 20.x |
+| Package Manager | pnpm 9.15.0 (from root `packageManager` field) |
+
+**Required environment variables** (Vercel project → Settings → Environment Variables):
+
+| Variable | Example | Notes |
+|---|---|---|
+| `NEXT_PUBLIC_API_URL` | `https://api.yourdomain.com/api/v1` | Production API base URL |
+| `NEXT_PUBLIC_AUTH_URL` | `https://api.yourdomain.com` | Better Auth server origin |
+
+No backend secrets (`DATABASE_URL`, `ENCRYPTION_KEY`, etc.) are needed for the frontend build.
+
+The web `prebuild` script compiles `@jobhunter/shared` before `next build` — required because shared `dist/` is not committed.

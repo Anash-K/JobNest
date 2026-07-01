@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --port 3000",
+    "prebuild": "pnpm --filter @jobhunter/shared build",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
