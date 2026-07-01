@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+.next/
+out/
+build/
+apps/api/src/generated/
+*.tsbuildinfo
+
+# Environment (never commit secrets)
+.env
+.env.local
+.env.*.local
+apps/api/.env
+apps/web/.env.local
+
+# Uploads & runtime data
+apps/api/uploads/
+
+# IDE & OS
+.idea/
+.vscode/
+.DS_Store
+*.log
+
+# Prisma
+# migration_lock.toml is tracked; migration SQL folders are committed
+
+# Testing
+coverage/

@@ -1,0 +1,91 @@
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+
+@layer base {
+  /* Light — sky blue + white */
+  :root {
+    --background: 204 100% 99%;
+    --foreground: 215 28% 17%;
+    --card: 0 0% 100%;
+    --card-foreground: 215 28% 17%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 28% 17%;
+    --primary: 199 89% 48%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 204 94% 94%;
+    --secondary-foreground: 215 28% 17%;
+    --muted: 204 100% 97%;
+    --muted-foreground: 215 16% 42%;
+    --accent: 199 95% 92%;
+    --accent-foreground: 199 89% 32%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 199 80% 88%;
+    --input: 199 80% 88%;
+    --ring: 199 89% 48%;
+    --radius: 0.5rem;
+    --sidebar: 204 100% 98%;
+    --chart-1: 199 89% 48%;
+    --chart-2: 204 94% 60%;
+    --chart-3: 199 70% 65%;
+    --chart-4: 215 28% 35%;
+    --chart-5: 199 50% 75%;
+  }
+
+  /* Dark — zinc/slate industry standard */
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 6%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 6%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 199 89% 58%;
+    --primary-foreground: 240 10% 6%;
+    --secondary: 240 4% 16%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 4% 16%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 240 4% 16%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 63% 45%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 4% 16%;
+    --input: 240 4% 16%;
+    --ring: 199 89% 58%;
+    --sidebar: 240 10% 5%;
+    --chart-1: 199 89% 58%;
+    --chart-2: 204 70% 55%;
+    --chart-3: 199 60% 70%;
+    --chart-4: 240 5% 65%;
+    --chart-5: 199 40% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+
+  /* Smooth theme transition without flash on interactive elements */
+  html.transitioning,
+  html.transitioning * {
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease !important;
+  }
+}
+
+/* Tiptap / prose in dark mode */
+.dark .ProseMirror {
+  @apply text-foreground;
+}
+
+.dark .prose {
+  --tw-prose-body: hsl(var(--foreground));
+  --tw-prose-headings: hsl(var(--foreground));
+  --tw-prose-links: hsl(var(--primary));
+}

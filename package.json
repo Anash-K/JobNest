@@ -1,0 +1,25 @@
+{
+  "name": "jobhunter",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Personal Job Outreach CRM — monorepo root",
+  "scripts": {
+    "dev": "pnpm --filter @jobhunter/shared build && pnpm --parallel --filter @jobhunter/api --filter @jobhunter/web dev",
+    "dev:api": "pnpm --filter @jobhunter/api dev",
+    "dev:web": "pnpm --filter @jobhunter/web dev",
+    "build": "pnpm run --filter @jobhunter/shared build && pnpm run --filter @jobhunter/api build && pnpm run --filter @jobhunter/web build",
+    "db:up": "docker-compose up -d",
+    "db:down": "docker-compose down",
+    "db:migrate": "pnpm --filter @jobhunter/api db:migrate",
+    "db:migrate:deploy": "pnpm --filter @jobhunter/api db:migrate:deploy",
+    "db:generate": "pnpm --filter @jobhunter/api db:generate",
+    "db:studio": "pnpm --filter @jobhunter/api db:studio",
+    "lint": "pnpm run --recursive lint",
+    "typecheck": "pnpm run --recursive typecheck"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.0"
+}

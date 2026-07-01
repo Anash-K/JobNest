@@ -1,0 +1,364 @@
+// Production-grade multi-tenant database schema — Job Outreach CRM.
+// All tables contain a userId field for strict tenant isolation.
+// Indexes are optimized for O(log n) tenant searches and lookups.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum PipelineStatus {
+  NEW
+  READY_TO_APPLY
+  APPLIED
+  REPLIED
+  INTERVIEW
+  REJECTED
+  OFFER
+}
+
+enum EmailLogStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+}
+
+enum GeneratedEmailStatus {
+  DRAFT
+  APPROVED
+  SENT
+  FAILED
+}
+
+enum EmailFailureReason {
+  INVALID_EMAIL
+  GMAIL_LIMIT
+  TIMEOUT
+  NETWORK_ERROR
+  ATTACHMENT_ERROR
+  MISSING_VARIABLES
+  GMAIL_NOT_CONNECTED
+  DRAFT_NOT_APPROVED
+  DRAFT_INVALID
+}
+
+enum LeadSource {
+  MANUAL
+  EXCEL_IMPORT
+  LINKEDIN
+  OTHER
+}
+
+// ==========================================
+// Better Auth & User Management Models
+// ==========================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  role          Role      @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions      Session[]
+  accounts      Account[]
+  
+  // Settings & Preferences
+  defaultDelaySeconds Int     @default(25)
+  defaultResumeId     String?
+  defaultTemplateId   String?
+
+  // Business Relationships (Tenant Isolation)
+  campaigns        Campaign[]
+  resumes          Resume[]
+  jobLeads         JobLead[]
+  emailTemplates   EmailTemplate[]
+  generatedEmails  GeneratedEmail[]
+  applications     Application[]
+  emailLogs        EmailLog[]
+  gmailAccount     GmailAccount?
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime
+  updatedAt DateTime
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("session")
+  @@index([userId])
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime
+  updatedAt             DateTime
+
+  @@map("account")
+  @@index([userId])
+}
+
+model Verification {
+  id         String    @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime?
+  updatedAt  DateTime?
+
+  @@map("verification")
+}
+
+// ==========================================
+// Gmail Integration
+// ==========================================
+
+model GmailAccount {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  email                 String
+  encryptedRefreshToken String   // AES-256-GCM encrypted
+  scopes                String   // space-separated scopes allowed
+  connectedAt           DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ==========================================
+// Core CRM Business Models
+// ==========================================
+
+model Campaign {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leads           JobLead[]
+  applications    Application[]
+  emailLogs       EmailLog[]
+  generatedEmails GeneratedEmail[]
+
+  @@index([userId])
+  @@index([userId, name])
+}
+
+model Resume {
+  id               String   @id @default(cuid())
+  userId           String
+  name             String
+  fileName         String
+  filePath         String
+  mimeType         String   @default("application/pdf")
+  fileSize         Int
+  isDefault        Boolean  @default(false)
+  version          Int      @default(1)
+  originalResumeId String?
+  archived         Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  originalResume   Resume?  @relation("ResumeVersions", fields: [originalResumeId], references: [id], onDelete: Cascade)
+  versions         Resume[] @relation("ResumeVersions")
+  
+  applications     Application[]
+  emailLogs        EmailLog[]
+  generatedEmails  GeneratedEmail[]
+
+  @@index([userId])
+  @@index([originalResumeId])
+}
+
+model JobLead {
+  id             String         @id @default(cuid())
+  userId         String
+  campaignId     String?
+  companyName    String
+  receiverName   String?
+  receiverEmail  String?
+  jobTitle       String?
+  location       String?
+  salary         String?
+  linkedinUrl    String?
+  jobUrl         String?
+  jobDescription String?        @db.Text
+  notes          String?        @db.Text
+  pipelineStatus PipelineStatus @default(NEW)
+  source         LeadSource     @default(MANUAL)
+  customFields   Json           @default("{}")
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign        Campaign?        @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  applications    Application[]
+  emailLogs       EmailLog[]
+  generatedEmails GeneratedEmail[]
+
+  @@index([userId])
+  @@index([userId, campaignId])
+  @@index([userId, pipelineStatus])
+  @@index([userId, companyName])
+  @@index([userId, createdAt])
+}
+
+model EmailTemplate {
+  id            String   @id @default(cuid())
+  userId        String
+  name          String
+  subject       String
+  bodyHtml      String   @db.Text
+  bodyPlainText String?  @db.Text
+  detectedVars  String[]
+  variableMap   Json     @default("{}")
+  defaultValues Json     @default("{}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applications    Application[]
+  emailLogs       EmailLog[]
+  generatedEmails GeneratedEmail[]
+
+  @@index([userId])
+}
+
+model GeneratedEmail {
+  id                String               @id @default(cuid())
+  userId            String
+  campaignId        String?
+  leadId            String
+  templateId        String?
+  resumeId          String?
+  buildBatchId      String?
+  recipientEmail    String
+  subject           String
+  bodyHtml          String               @db.Text
+  bodyPlainText     String?              @db.Text
+  previewHash       String
+  status            GeneratedEmailStatus @default(DRAFT)
+  isValid           Boolean              @default(false)
+  missingVariables  String[]             @default([])
+  renderedVariables Json                 @default("{}")
+  approvedAt        DateTime?
+  sentAt            DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign  Campaign?      @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  lead      JobLead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  template  EmailTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  resume    Resume?        @relation(fields: [resumeId], references: [id], onDelete: SetNull)
+  emailLog  EmailLog?
+  application Application?
+
+  @@index([userId])
+  @@index([userId, campaignId])
+  @@index([userId, leadId])
+  @@index([userId, status])
+  @@index([userId, buildBatchId])
+  @@index([userId, createdAt])
+}
+
+model Application {
+  id               String         @id @default(cuid())
+  userId           String
+  campaignId       String?
+  jobLeadId        String
+  resumeId         String?
+  templateId       String?
+  generatedEmailId String?        @unique
+  status           PipelineStatus @default(APPLIED)
+  appliedDate      DateTime       @default(now())
+  notes            String?        @db.Text
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign       Campaign?       @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  jobLead        JobLead         @relation(fields: [jobLeadId], references: [id], onDelete: Cascade)
+  resume         Resume?         @relation(fields: [resumeId], references: [id], onDelete: SetNull)
+  template       EmailTemplate?  @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  generatedEmail GeneratedEmail? @relation(fields: [generatedEmailId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([userId, campaignId])
+  @@index([userId, jobLeadId])
+  @@index([userId, status])
+  @@index([userId, appliedDate])
+}
+
+model EmailLog {
+  id               String              @id @default(cuid())
+  userId           String
+  campaignId       String?
+  jobLeadId        String?
+  templateId       String?
+  resumeId         String?
+  generatedEmailId String?             @unique
+  recipientEmail   String
+  subject          String
+  bodyHtml         String              @db.Text
+  bodyPlainText    String?             @db.Text
+  status           EmailLogStatus      @default(PENDING)
+  failureReason    EmailFailureReason?
+  failureMessage   String?             @db.Text
+  gmailMessageId   String?
+  sentAt           DateTime?
+  retryCount       Int                 @default(0)
+  bulkSendId       String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign       Campaign?       @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  jobLead        JobLead?        @relation(fields: [jobLeadId], references: [id], onDelete: SetNull)
+  template       EmailTemplate?  @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  resume         Resume?         @relation(fields: [resumeId], references: [id], onDelete: SetNull)
+  generatedEmail GeneratedEmail? @relation(fields: [generatedEmailId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([userId, campaignId])
+  @@index([userId, status])
+  @@index([userId, bulkSendId])
+  @@index([userId, createdAt])
+}
