@@ -56,7 +56,7 @@ export const auth = betterAuth({
     useSecureCookies: isProduction,
     cookiePrefix: 'jobnest',
   },
-  trustedOrigins: [env.CORS_ORIGIN],
+  trustedOrigins: env.CORS_ORIGIN,
 });
 
 export type AuthSession = typeof auth.$Infer.Session;
