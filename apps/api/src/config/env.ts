@@ -20,7 +20,10 @@ const envSchema = z.object({
     }),
   PORT: z.coerce.number().int().min(1).max(65535).default(4000),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  CORS_ORIGIN: z.string().url().default('http://localhost:3000'),
+  CORS_ORIGIN: z
+    .string()
+    .default('http://localhost:3000')
+    .transform((val) => val.split(',').map((origin) => origin.trim())),
   GOOGLE_CLIENT_ID: z.string().min(1, {
     message: 'GOOGLE_CLIENT_ID is required (global OAuth application)',
   }),

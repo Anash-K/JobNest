@@ -126,3 +126,43 @@ Root Directory: **`apps/web`**
 No backend secrets (`DATABASE_URL`, `ENCRYPTION_KEY`, etc.) are needed for the frontend build.
 
 The web `prebuild` script compiles `@jobhunter/shared` before `next build` — required because shared `dist/` is not committed.
+
+## Deploy backend (Render)
+
+Root Directory: **`apps/api`**
+
+| Setting | Value |
+|---|---|
+| Runtime | Node |
+| Install Command | `cd ../.. && pnpm install --frozen-lockfile` |
+| Build Command | `cd ../.. && pnpm --filter @jobhunter/api build && pnpm --filter @jobhunter/api exec prisma migrate deploy` |
+| Start Command | `node dist/index.js` |
+| Health Check Path | `/api/v1/health` |
+| Node.js Version | `20` (see root `.node-version` and `packageManager`) |
+
+**Required environment variables** (Render → Environment):
+
+| Variable | Example | Notes |
+|---|---|---|
+| `NODE_ENV` | `production` | Enables secure cookies, production logging |
+| `DATABASE_URL` | `postgresql://...@ep-xxx-pooler.neon.tech/neondb?sslmode=require` | Neon **pooled** connection string |
+| `BETTER_AUTH_SECRET` | *(openssl rand -base64 32)* | Min 32 chars |
+| `BETTER_AUTH_URL` | `https://your-api.onrender.com` | Public API URL (no trailing slash) |
+| `CORS_ORIGIN` | `https://your-app.vercel.app` | Vercel frontend URL |
+| `GOOGLE_CLIENT_ID` | *(from Google Cloud Console)* | Required at startup |
+| `GOOGLE_CLIENT_SECRET` | *(from Google Cloud Console)* | Required at startup |
+| `GOOGLE_REDIRECT_URI` | `https://your-api.onrender.com/api/v1/gmail/callback` | Must match Google OAuth config |
+| `ENCRYPTION_KEY` | *(openssl rand -hex 32)* | 64-char hex string |
+
+**Optional (defaults in code):**
+
+| Variable | Default |
+|---|---|
+| `PORT` | `4000` (Render sets `PORT` automatically) |
+| `UPLOAD_DIR` | `./uploads` (ephemeral on Render; add a [persistent disk](https://render.com/docs/disks) for resume storage) |
+| `MAX_RESUME_SIZE_MB` | `5` |
+| `BULK_SEND_DELAY_SECONDS` | `25` |
+| `BULK_SEND_MAX_RETRIES` | `3` |
+| `BULK_SEND_DAILY_WARN_THRESHOLD` | `400` |
+
+A [`render.yaml`](render.yaml) blueprint is included for one-click deploy. Migrations run during the build step via `prisma migrate deploy` (requires `DATABASE_URL` at build time).
