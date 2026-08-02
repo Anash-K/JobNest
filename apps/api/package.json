@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "prebuild": "pnpm --filter @jobhunter/shared build",
-    "build": "prisma generate && tsc -p tsconfig.json && cp -r src/generated dist/generated",
+    "build": "prisma generate && tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "db:generate": "prisma generate",
