@@ -2,7 +2,7 @@ import { prisma } from '../lib/prisma';
 import { buildPaginationMeta, parseListQuery } from '@jobhunter/shared';
 import { NotFoundError } from '../utils/errors';
 import { prismaPagination } from '../utils/search';
-import type { Prisma } from '../generated/prisma/client';
+import type { Prisma } from '../generated/prisma';
 
 function buildWhere(
   userId: string,
