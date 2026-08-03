@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { auth } from '../lib/auth';
+import { getAuth } from '../lib/auth';
 import { UnauthorizedError } from '../utils/errors';
 
 /**
@@ -33,6 +33,7 @@ function parseRole(value: unknown): 'USER' | 'ADMIN' {
  */
 export async function requireAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
   try {
+    const auth = await getAuth();
     const session = await auth.api.getSession({
       headers: toWebHeaders(req.headers as Record<string, string | string[] | undefined>),
     });

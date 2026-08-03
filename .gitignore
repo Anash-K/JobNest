@@ -32,3 +32,5 @@ apps/api/uploads/
 
 # Testing
 coverage/
+.vercel
+.env*
