@@ -20,9 +20,6 @@ export async function middleware(request: NextRequest) {
   // AuthGuard and GuestGuard components to support cross-origin API sessions.
   return NextResponse.next();
 }
-  // AuthGuard and GuestGuard components to support cross-origin API sessions.
-  return NextResponse.next();
-}
 
 export const config = {
   matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
