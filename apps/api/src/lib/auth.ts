@@ -75,9 +75,6 @@ function createAuth() {
       advanced: {
         useSecureCookies: true,
         cookiePrefix: 'jobnest',
-        crossSubDomainCookies: {
-          enabled: true,
-        },
         defaultCookieAttributes: {
           sameSite: 'none',
           secure: true,
