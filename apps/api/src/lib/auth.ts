@@ -1,7 +1,7 @@
 import type { betterAuth as BetterAuthFn } from 'better-auth';
 import type { prismaAdapter as PrismaAdapterFn } from 'better-auth/adapters/prisma';
 import { prisma } from './prisma';
-import { env, isProduction } from '../config/env';
+import { env } from '../config/env';
 import { authService } from '../services/auth.service';
 
 // Trace hint only, never executed: keeps these specifiers visible to
@@ -73,8 +73,15 @@ function createAuth() {
         },
       },
       advanced: {
-        useSecureCookies: isProduction,
+        useSecureCookies: true,
         cookiePrefix: 'jobnest',
+        crossSubDomainCookies: {
+          enabled: true,
+        },
+        defaultCookieAttributes: {
+          sameSite: 'none',
+          secure: true,
+        }
       },
       trustedOrigins: env.CORS_ORIGIN,
     })
