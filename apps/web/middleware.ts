@@ -1,29 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import {
-  AUTH_ROUTES,
-  DEFAULT_APP_ROUTE,
-  isAuthPath,
-} from '@/lib/constants/app';
-
-const AUTH_BASE_URL = process.env.NEXT_PUBLIC_AUTH_URL ?? 'http://localhost:4000';
-
-async function hasSession(request: NextRequest): Promise<boolean> {
-  try {
-    const response = await fetch(`${AUTH_BASE_URL}/api/v1/auth/get-session`, {
-      headers: {
-        cookie: request.headers.get('cookie') ?? '',
-      },
-      cache: 'no-store',
-    });
-
-    if (!response.ok) return false;
-
-    const data = (await response.json()) as { user?: unknown };
-    return Boolean(data?.user);
-  } catch {
-    return false;
-  }
-}
+import { DEFAULT_APP_ROUTE } from '@/lib/constants/app';
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -36,24 +12,15 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const authenticated = await hasSession(request);
-  const isAuthRoute = isAuthPath(pathname);
-
   if (pathname === '/') {
-    const destination = authenticated ? DEFAULT_APP_ROUTE : AUTH_ROUTES.login;
-    return NextResponse.redirect(new URL(destination, request.url));
-  }
-
-  if (!authenticated && !isAuthRoute) {
-    const loginUrl = new URL(AUTH_ROUTES.login, request.url);
-    loginUrl.searchParams.set('next', pathname);
-    return NextResponse.redirect(loginUrl);
-  }
-
-  if (authenticated && isAuthRoute) {
     return NextResponse.redirect(new URL(DEFAULT_APP_ROUTE, request.url));
   }
 
+  // Authentication route protection is now handled exclusively by the client-side
+  // AuthGuard and GuestGuard components to support cross-origin API sessions.
+  return NextResponse.next();
+}
+  // AuthGuard and GuestGuard components to support cross-origin API sessions.
   return NextResponse.next();
 }
 
