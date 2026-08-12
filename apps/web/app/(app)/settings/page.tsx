@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,10 +20,10 @@ function SettingsContent() {
   const { data: gmailStatus, refetch } = useGmailStatus();
   const [message, setMessage] = useState<string | null>(null);
 
-  const refreshGmail = () => {
+  const refreshGmail = useCallback(() => {
     void refetch();
     void queryClient.invalidateQueries({ queryKey: queryKeys.gmailStatus });
-  };
+  }, [refetch, queryClient]);
 
   useEffect(() => {
     const gmail = searchParams.get('gmail');
@@ -36,7 +36,7 @@ function SettingsContent() {
     } else if (gmail === 'error') {
       setMessage(`Connection failed: ${errMsg ? decodeURIComponent(errMsg) : 'unknown error'}`);
     }
-  }, [searchParams]);
+  }, [searchParams, refreshGmail]);
 
   return (
     <>

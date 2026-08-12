@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import { paramId } from '../utils/params';
-import fs from 'fs';
 import { asyncHandler } from '../middleware/error-handler';
 import { requireOwnership } from '../middleware/ownership';
 import { resumeUpload } from '../middleware/upload';
@@ -9,14 +8,6 @@ import { resumeService } from '../services/resume.service';
 import { ValidationError } from '../utils/errors';
 
 const router: Router = Router();
-
-function streamPdf(res: import('express').Response, resume: { fileName: string; filePath: string }, disposition: 'inline' | 'attachment'): void {
-  const filePath = resumeService.getAbsolutePath(resume);
-  res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `${disposition}; filename="${resume.fileName}"`);
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  fs.createReadStream(filePath).pipe(res);
-}
 
 /**
  * GET /api/v1/resumes
@@ -70,14 +61,14 @@ router.get(
 
 /**
  * GET /api/v1/resumes/:id/preview
- * Stream the PDF inline for browser preview (iframe/object embed).
+ * Redirect to a short-lived signed URL for inline browser preview.
  */
 router.get(
   '/:id/preview',
   requireOwnership('resume'),
   asyncHandler(async (req, res) => {
-    const resume = await resumeService.getReadableFile(paramId(req.params.id), req.user!.id);
-    streamPdf(res, resume, 'inline');
+    const signedUrl = await resumeService.getSignedUrl(paramId(req.params.id), req.user!.id, false);
+    res.redirect(302, signedUrl);
   }),
 );
 
@@ -150,14 +141,14 @@ router.patch(
 
 /**
  * GET /api/v1/resumes/:id/download
- * Stream the PDF file to the client as an attachment.
+ * Redirect to a short-lived signed URL that prompts a file download.
  */
 router.get(
   '/:id/download',
   requireOwnership('resume'),
   asyncHandler(async (req, res) => {
-    const resume = await resumeService.getReadableFile(paramId(req.params.id), req.user!.id);
-    streamPdf(res, resume, 'attachment');
+    const signedUrl = await resumeService.getSignedUrl(paramId(req.params.id), req.user!.id, true);
+    res.redirect(302, signedUrl);
   }),
 );
 

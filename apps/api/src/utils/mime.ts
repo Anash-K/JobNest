@@ -1,4 +1,3 @@
-import fs from 'fs/promises';
 
 function base64UrlEncode(buffer: Buffer): string {
   return buffer
@@ -22,13 +21,12 @@ export async function buildMimeMessage(params: {
   subject: string;
   bodyHtml: string;
   bodyPlainText: string;
-  attachmentPath: string;
+  attachmentBuffer: Buffer;
   attachmentName: string;
 }): Promise<string> {
   const mixedBoundary = `mixed_${Date.now()}`;
   const altBoundary = `alt_${Date.now()}`;
-  const pdfBuffer = await fs.readFile(params.attachmentPath);
-  const pdfBase64 = pdfBuffer.toString('base64');
+  const pdfBase64 = params.attachmentBuffer.toString('base64');
 
   const lines: string[] = [
     `From: ${params.from}`,

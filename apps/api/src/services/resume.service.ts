@@ -1,8 +1,7 @@
-import fs from 'fs/promises';
-import path from 'path';
 import { prisma } from '../lib/prisma';
 import { env } from '../config/env';
-import { NotFoundError, ValidationError } from '../utils/errors';
+import { supabase } from '../lib/supabase';
+import { NotFoundError, ValidationError, ExternalServiceError } from '../utils/errors';
 import { assertPdfBuffer } from '../utils/pdf';
 import type { Resume } from '../generated/prisma/client';
 
@@ -10,12 +9,6 @@ export type ResumeDeleteResult = {
   deleted: boolean;
   archived: boolean;
 };
-
-const UPLOAD_ROOT = path.resolve(process.cwd(), env.UPLOAD_DIR, 'resumes');
-
-async function ensureUploadDir(): Promise<void> {
-  await fs.mkdir(UPLOAD_ROOT, { recursive: true });
-}
 
 /**
  * Assert the resume belongs to this user — return 404 rather than 403
@@ -49,13 +42,23 @@ function validateUploadFile(file: Express.Multer.File): void {
   assertPdfBuffer(file.buffer);
 }
 
+function sanitizeFileName(name: string): string {
+  const sanitized = name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  return /^\.+$/.test(sanitized) ? 'resume.pdf' : sanitized;
+}
+
+function getObjectKey(userId: string, resumeId: string, version: number, fileName: string): string {
+  return `users/${userId}/resumes/${resumeId}/v${version}/${sanitizeFileName(fileName)}`;
+}
+
 export const resumeService = {
   /**
    * List all non-archived resumes for the user, default first.
+   * Only returns fully uploaded resumes (filePath !== '').
    */
   async list(userId: string): Promise<Resume[]> {
     return prisma.resume.findMany({
-      where: { userId, archived: false },
+      where: { userId, archived: false, filePath: { not: '' } },
       orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
     });
   },
@@ -65,7 +68,7 @@ export const resumeService = {
    */
   async getDefault(userId: string): Promise<Resume> {
     const resume = await prisma.resume.findFirst({
-      where: { userId, isDefault: true, archived: false },
+      where: { userId, isDefault: true, archived: false, filePath: { not: '' } },
       orderBy: { updatedAt: 'desc' },
     });
     if (!resume) throw new NotFoundError('Default resume');
@@ -73,10 +76,14 @@ export const resumeService = {
   },
 
   /**
-   * Get a single resume by id, asserting ownership.
+   * Get a single resume by id, asserting ownership and ensuring it's ready.
    */
   async getById(id: string, userId: string): Promise<Resume> {
-    return assertOwnership(id, userId);
+    const resume = await assertOwnership(id, userId);
+    if (!resume.filePath) {
+      throw new NotFoundError('Resume', id); // It's still pending/uploading
+    }
+    return resume;
   },
 
   /**
@@ -100,8 +107,7 @@ export const resumeService = {
   },
 
   /**
-   * Upload a new resume.
-   * If isDefault is true, atomically demote all other resumes for this user.
+   * Upload a new resume using Compensation-Based Consistency.
    */
   async upload(
     userId: string,
@@ -111,66 +117,85 @@ export const resumeService = {
   ): Promise<Resume> {
     validateUploadFile(file);
 
-    await ensureUploadDir();
-
-    const resume = await prisma.$transaction(async (tx) => {
+    // 1. Transaction 1: Create pending record
+    const { created, shouldDefault } = await prisma.$transaction(async (tx) => {
       const activeCount = await tx.resume.count({
-        where: { userId, archived: false },
+        where: { userId, archived: false, filePath: { not: '' } },
       });
-      const shouldDefault = isDefault || activeCount === 0;
+      const makeDefault = isDefault || activeCount === 0;
 
-      if (shouldDefault) {
-        await tx.resume.updateMany({
-          where: { userId, isDefault: true },
-          data: { isDefault: false },
-        });
-      }
-
-      const created = await tx.resume.create({
+      const record = await tx.resume.create({
         data: {
           userId,
           name,
           fileName: file.originalname,
-          filePath: '',
+          filePath: '', // PENDING
           fileSize: file.size,
-          isDefault: shouldDefault,
+          isDefault: makeDefault,
           version: 1,
           originalResumeId: null,
           archived: false,
         },
       });
 
-      const safeName = `${created.id}_${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-      const filePath = path.join(UPLOAD_ROOT, safeName);
-      await fs.writeFile(filePath, file.buffer);
-
-      const updated = await tx.resume.update({
-        where: { id: created.id },
-        data: { filePath },
-      });
-
-      if (shouldDefault) {
-        await tx.user.update({
-          where: { id: userId },
-          data: { defaultResumeId: updated.id },
-        });
-      }
-
-      return updated;
+      return { created: record, shouldDefault: makeDefault };
     });
 
-    return resume;
+    const objectKey = getObjectKey(userId, created.id, 1, file.originalname);
+
+    // 2. Upload to Supabase
+    const { error: uploadError } = await supabase.storage
+      .from(env.SUPABASE_RESUME_BUCKET)
+      .upload(objectKey, file.buffer, {
+        contentType: 'application/pdf',
+        upsert: false, // Prevent accidental overwrite
+      });
+
+    if (uploadError) {
+      // Rollback database record
+      await prisma.resume.delete({ where: { id: created.id } }).catch(() => {});
+      throw new ExternalServiceError(`Failed to upload resume: ${uploadError.message}`);
+    }
+
+    // 3. Transaction 2: Finalize database
+    try {
+      const finalResume = await prisma.$transaction(async (tx) => {
+        if (shouldDefault) {
+          await tx.resume.updateMany({
+            where: { userId, isDefault: true, id: { not: created.id } },
+            data: { isDefault: false },
+          });
+          await tx.user.update({
+            where: { id: userId },
+            data: { defaultResumeId: created.id },
+          });
+        }
+
+        return tx.resume.update({
+          where: { id: created.id },
+          data: { filePath: objectKey },
+        });
+      });
+      return finalResume;
+    } catch (dbError) {
+      // 4. Compensation: Remove orphaned object from Supabase
+      const { error: cleanupError } = await supabase.storage
+        .from(env.SUPABASE_RESUME_BUCKET)
+        .remove([objectKey]);
+        
+      if (cleanupError) {
+        console.error(`[ORPHAN_OBJECT] Cleanup failed for key: ${objectKey}. ResumeId: ${created.id}. Error:`, cleanupError);
+      }
+      
+      // Attempt to clean up the pending record if possible
+      await prisma.resume.delete({ where: { id: created.id } }).catch(() => {});
+      
+      throw new Error('Database finalization failed after successful upload');
+    }
   },
 
   /**
    * Replace an existing resume with a new version.
-   *
-   * The original resume is archived (not deleted) so that any GeneratedEmail
-   * or Application that referenced it continues to point to the correct file.
-   * The new resume is created with an incremented version and an originalResumeId
-   * pointing back to the root of the version chain.
-   *
-   * If the replaced resume was the default, the new version inherits that role.
    */
   async replace(
     userId: string,
@@ -180,69 +205,88 @@ export const resumeService = {
   ): Promise<Resume> {
     validateUploadFile(file);
 
-    const existing = await assertOwnership(existingId, userId);
+    const existing = await this.getById(existingId, userId);
     if (existing.archived) {
       throw new ValidationError('Cannot replace an archived resume version');
     }
-
-    await ensureUploadDir();
 
     const rootId = existing.originalResumeId ?? existing.id;
     const nextVersion = existing.version + 1;
     const newName = name ?? existing.name;
 
-    const newResume = await prisma.$transaction(async (tx) => {
-      await tx.resume.update({
-        where: { id: existing.id },
-        data: { archived: true, isDefault: false },
-      });
-
-      if (existing.isDefault) {
-        await tx.resume.updateMany({
-          where: { userId, isDefault: true },
-          data: { isDefault: false },
-        });
-      }
-
-      const created = await tx.resume.create({
-        data: {
-          userId,
-          name: newName,
-          fileName: file.originalname,
-          filePath: '',
-          fileSize: file.size,
-          isDefault: existing.isDefault,
-          version: nextVersion,
-          originalResumeId: rootId,
-          archived: false,
-        },
-      });
-
-      const safeName = `${created.id}_${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-      const filePath = path.join(UPLOAD_ROOT, safeName);
-      await fs.writeFile(filePath, file.buffer);
-
-      const updated = await tx.resume.update({
-        where: { id: created.id },
-        data: { filePath },
-      });
-
-      if (existing.isDefault) {
-        await tx.user.update({
-          where: { id: userId },
-          data: { defaultResumeId: updated.id },
-        });
-      }
-
-      return updated;
+    // 1. Create pending new version
+    const created = await prisma.resume.create({
+      data: {
+        userId,
+        name: newName,
+        fileName: file.originalname,
+        filePath: '', // PENDING
+        fileSize: file.size,
+        isDefault: existing.isDefault,
+        version: nextVersion,
+        originalResumeId: rootId,
+        archived: false,
+      },
     });
 
-    return newResume;
+    const objectKey = getObjectKey(userId, created.id, nextVersion, file.originalname);
+
+    // 2. Upload to Supabase
+    const { error: uploadError } = await supabase.storage
+      .from(env.SUPABASE_RESUME_BUCKET)
+      .upload(objectKey, file.buffer, {
+        contentType: 'application/pdf',
+        upsert: false,
+      });
+
+    if (uploadError) {
+      await prisma.resume.delete({ where: { id: created.id } }).catch(() => {});
+      throw new ExternalServiceError(`Failed to upload resume: ${uploadError.message}`);
+    }
+
+    // 3. Finalize
+    try {
+      const finalResume = await prisma.$transaction(async (tx) => {
+        // Archive the existing one
+        await tx.resume.update({
+          where: { id: existing.id },
+          data: { archived: true, isDefault: false },
+        });
+
+        if (existing.isDefault) {
+          await tx.resume.updateMany({
+            where: { userId, isDefault: true, id: { not: created.id } },
+            data: { isDefault: false },
+          });
+          await tx.user.update({
+            where: { id: userId },
+            data: { defaultResumeId: created.id },
+          });
+        }
+
+        return tx.resume.update({
+          where: { id: created.id },
+          data: { filePath: objectKey },
+        });
+      });
+
+      return finalResume;
+    } catch (dbError) {
+      const { error: cleanupError } = await supabase.storage
+        .from(env.SUPABASE_RESUME_BUCKET)
+        .remove([objectKey]);
+        
+      if (cleanupError) {
+        console.error(`[ORPHAN_OBJECT] Cleanup failed for key: ${objectKey}. ResumeId: ${created.id}. Error:`, cleanupError);
+      }
+      
+      await prisma.resume.delete({ where: { id: created.id } }).catch(() => {});
+      throw new Error('Database finalization failed after successful upload');
+    }
   },
 
   /**
    * Get all versions (including archived) of a resume version chain.
-   * Accepts either the root id or any child id in the chain.
    */
   async getVersionHistory(userId: string, resumeId: string): Promise<Resume[]> {
     const resume = await assertOwnership(resumeId, userId);
@@ -252,6 +296,7 @@ export const resumeService = {
       where: {
         userId,
         OR: [{ id: rootId }, { originalResumeId: rootId }],
+        filePath: { not: '' } // Exclude pending
       },
       orderBy: { version: 'asc' },
     });
@@ -259,11 +304,9 @@ export const resumeService = {
 
   /**
    * Atomically set one resume as the default for this user.
-   * Demotes all other resumes for the user in the same transaction.
-   * The target resume must not be archived.
    */
   async setDefault(id: string, userId: string): Promise<Resume> {
-    const resume = await assertOwnership(id, userId);
+    const resume = await this.getById(id, userId);
     if (resume.archived) {
       throw new ValidationError('Cannot set an archived resume as default');
     }
@@ -287,12 +330,10 @@ export const resumeService = {
 
   /**
    * Soft-delete (archive) a resume.
-   * The physical file is NOT deleted so that GeneratedEmails retain their
-   * attachment references. The resume is simply hidden from normal listings.
-   * Archived resumes cannot be set as default.
+   * The Supabase object is NOT deleted so that GeneratedEmails retain their references.
    */
   async archive(id: string, userId: string): Promise<Resume> {
-    const resume = await assertOwnership(id, userId);
+    const resume = await this.getById(id, userId);
     if (resume.archived) {
       throw new ValidationError('Resume is already archived');
     }
@@ -315,9 +356,8 @@ export const resumeService = {
   },
 
   /**
-   * Delete or archive a resume per IMPLEMENTATION.md §5.3:
-   * archives when referenced by generated emails, applications, or email logs;
-   * otherwise hard-deletes the row and physical file.
+   * Delete or archive a resume per domain rules:
+   * Archives when referenced; otherwise hard-deletes the row and Supabase object.
    */
   async delete(id: string, userId: string): Promise<ResumeDeleteResult> {
     const resume = await assertOwnership(id, userId);
@@ -330,6 +370,7 @@ export const resumeService = {
       return { deleted: false, archived: true };
     }
 
+    // Hard delete
     await prisma.$transaction(async (tx) => {
       if (resume.isDefault) {
         await tx.user.update({
@@ -340,28 +381,54 @@ export const resumeService = {
       await tx.resume.delete({ where: { id } });
     });
 
-    try {
-      await fs.unlink(resume.filePath);
-    } catch {
-      // file may already be gone; non-fatal
+    if (resume.filePath) {
+      const { error } = await supabase.storage
+        .from(env.SUPABASE_RESUME_BUCKET)
+        .remove([resume.filePath]);
+      
+      if (error) {
+        console.error(`[ORPHAN_OBJECT] Cleanup failed during delete for key: ${resume.filePath}. Error:`, error);
+      }
     }
 
     return { deleted: true, archived: false };
   },
 
-  getAbsolutePath(resume: { filePath: string }): string {
-    return resume.filePath;
+  /**
+   * Generate a signed URL for secure download/preview.
+   */
+  async getSignedUrl(id: string, userId: string, download = false): Promise<string> {
+    const resume = await this.getById(id, userId);
+    
+    // Generate a short-lived signed URL (300 seconds)
+    const { data, error } = await supabase.storage
+      .from(env.SUPABASE_RESUME_BUCKET)
+      .createSignedUrl(resume.filePath, 300, {
+        download: download ? resume.fileName : false,
+      });
+
+    if (error || !data?.signedUrl) {
+      throw new ExternalServiceError('Failed to generate secure URL for resume');
+    }
+
+    return data.signedUrl;
   },
 
-  /** Absolute path after ownership verification — used by preview/download routes. */
-  async getReadableFile(id: string, userId: string): Promise<Resume> {
-    const resume = await assertOwnership(id, userId);
-    const filePath = this.getAbsolutePath(resume);
-    try {
-      await fs.access(filePath);
-    } catch {
-      throw new NotFoundError('Resume file', id);
+  /**
+   * Fetch the actual file buffer from Supabase Storage (e.g. for attaching to emails).
+   */
+  async getFileBuffer(id: string, userId: string): Promise<Buffer> {
+    const resume = await this.getById(id, userId);
+
+    const { data, error } = await supabase.storage
+      .from(env.SUPABASE_RESUME_BUCKET)
+      .download(resume.filePath);
+
+    if (error || !data) {
+      throw new ExternalServiceError(`Failed to download resume from storage: ${error?.message}`);
     }
-    return resume;
-  },
+
+    const arrayBuffer = await data.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  }
 };

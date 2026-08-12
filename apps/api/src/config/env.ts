@@ -47,8 +47,14 @@ const envSchema = z.object({
   BETTER_AUTH_URL: z.string().url({
     message: 'BETTER_AUTH_URL must be the API base URL (e.g. http://localhost:4000)',
   }),
-  UPLOAD_DIR: z.string().default('./uploads'),
-  MAX_RESUME_SIZE_MB: z.coerce.number().int().positive().default(5),
+  SUPABASE_URL: z.string().url({
+    message: 'SUPABASE_URL must be a valid URL',
+  }),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1, {
+    message: 'SUPABASE_SERVICE_ROLE_KEY is required',
+  }),
+  SUPABASE_RESUME_BUCKET: z.string().default('jobnest-resumes'),
+  MAX_RESUME_SIZE_MB: z.coerce.number().int().positive().default(4),
   BULK_SEND_DELAY_SECONDS: z.coerce.number().int().min(20).max(60).default(25),
   BULK_SEND_MAX_RETRIES: z.coerce.number().int().min(0).max(10).default(3),
   BULK_SEND_DAILY_WARN_THRESHOLD: z.coerce.number().int().positive().default(400),
@@ -61,6 +67,7 @@ function loadEnv() {
     const formatted = parsed.error.flatten().fieldErrors;
     console.error('❌ Invalid environment configuration:', formatted);
     process.exit(1);
+    throw new Error('Invalid environment configuration');
   }
 
   return parsed.data;

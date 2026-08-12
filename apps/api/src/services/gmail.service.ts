@@ -252,13 +252,14 @@ export const gmailService = {
     }
 
     const resume = await resumeService.getById(params.resumeId, userId);
+    const resumeBuffer = await resumeService.getFileBuffer(params.resumeId, userId);
     const mime = await buildMimeMessage({
       from: account.email,
       to: params.to,
       subject: params.subject,
       bodyHtml: params.bodyHtml,
       bodyPlainText: params.bodyPlainText ?? '',
-      attachmentPath: resumeService.getAbsolutePath(resume),
+      attachmentBuffer: resumeBuffer,
       attachmentName: resume.fileName,
     });
 

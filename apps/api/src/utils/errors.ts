@@ -55,3 +55,9 @@ export class ForbiddenError extends AppError {
   }
 }
 
+export class ExternalServiceError extends AppError {
+  constructor(message = 'External service operation failed') {
+    super(502, message, { code: 'EXTERNAL_SERVICE_ERROR', isOperational: true });
+  }
+}
+
