@@ -6,6 +6,7 @@ import { LogOut, Settings, User } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { APP_NAME } from '@/lib/constants/app';
+import { getInitials } from '@/lib/utils';
 
 export function UserMenu() {
   const { user, logout } = useAuth();
@@ -13,12 +14,7 @@ export function UserMenu() {
 
   if (!user) return null;
 
-  const initials = user.name
-    .split(' ')
-    .map((part) => part[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
+  const initials = getInitials(user.name);
 
   return (
     <div className="relative">

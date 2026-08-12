@@ -5,10 +5,11 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Loader2 } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PasswordInput } from '@/components/ui/password-input';
+import { SettingsSection } from '@/components/settings/SettingsSection';
 import { changePassword } from '@/lib/auth-client';
 
 const passwordSchema = z
@@ -25,7 +26,7 @@ const passwordSchema = z
 type PasswordForm = z.infer<typeof passwordSchema>;
 
 export function SecuritySettingsSection() {
-  const [message, setMessage] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const {
@@ -40,7 +41,7 @@ export function SecuritySettingsSection() {
 
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
-    setMessage(null);
+    setSaved(false);
 
     const result = await changePassword({
       currentPassword: values.currentPassword,
@@ -54,50 +55,55 @@ export function SecuritySettingsSection() {
     }
 
     reset();
-    setMessage('Password updated successfully.');
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
   });
 
   return (
-    <Card id="security">
-      <CardHeader>
-        <CardTitle>Security</CardTitle>
-        <CardDescription>Update your account password.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={onSubmit} className="space-y-4">
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          {message && <p className="text-sm text-primary">{message}</p>}
+    <SettingsSection id="security" title="Security" description="Manage your password and account security.">
+      <form onSubmit={onSubmit} className="max-w-sm space-y-5">
+        {error && <Alert variant="destructive">{error}</Alert>}
+        {saved && <Alert variant="success">Password updated successfully.</Alert>}
 
-          <div className="space-y-2">
-            <Label htmlFor="currentPassword">Current password</Label>
-            <Input id="currentPassword" type="password" autoComplete="current-password" {...register('currentPassword')} />
-            {errors.currentPassword && (
-              <p className="text-xs text-destructive">{errors.currentPassword.message}</p>
-            )}
-          </div>
+        <div className="space-y-2">
+          <Label htmlFor="currentPassword">Current password</Label>
+          <PasswordInput
+            id="currentPassword"
+            autoComplete="current-password"
+            {...register('currentPassword')}
+          />
+          {errors.currentPassword && (
+            <p className="text-xs text-destructive">{errors.currentPassword.message}</p>
+          )}
+        </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="newPassword">New password</Label>
-            <Input id="newPassword" type="password" autoComplete="new-password" {...register('newPassword')} />
-            {errors.newPassword && (
-              <p className="text-xs text-destructive">{errors.newPassword.message}</p>
-            )}
-          </div>
+        <div className="space-y-2">
+          <Label htmlFor="newPassword">New password</Label>
+          <PasswordInput id="newPassword" autoComplete="new-password" {...register('newPassword')} />
+          {errors.newPassword ? (
+            <p className="text-xs text-destructive">{errors.newPassword.message}</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">Must be at least 8 characters.</p>
+          )}
+        </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm new password</Label>
-            <Input id="confirmPassword" type="password" autoComplete="new-password" {...register('confirmPassword')} />
-            {errors.confirmPassword && (
-              <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>
-            )}
-          </div>
+        <div className="space-y-2">
+          <Label htmlFor="confirmPassword">Confirm new password</Label>
+          <PasswordInput
+            id="confirmPassword"
+            autoComplete="new-password"
+            {...register('confirmPassword')}
+          />
+          {errors.confirmPassword && (
+            <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>
+          )}
+        </div>
 
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Change password
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+        <Button type="submit" disabled={isSubmitting} className="mt-1">
+          {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+          Change password
+        </Button>
+      </form>
+    </SettingsSection>
   );
 }

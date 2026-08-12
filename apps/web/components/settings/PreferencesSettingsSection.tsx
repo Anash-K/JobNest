@@ -1,16 +1,18 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Loader2 } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { CheckCircle2, ChevronDown, Loader2 } from 'lucide-react';
+import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
+import { SettingsSection } from '@/components/settings/SettingsSection';
 import { useProfile, useUpdateProfile } from '@/hooks/queries/use-profile';
 import { useResumes, useTemplates } from '@/hooks/queries/use-settings-data';
-import { Skeleton } from '@/components/ui/skeleton';
 
 const preferencesSchema = z.object({
   defaultDelaySeconds: z.coerce.number().int().min(20).max(60),
@@ -20,11 +22,16 @@ const preferencesSchema = z.object({
 
 type PreferencesForm = z.infer<typeof preferencesSchema>;
 
+const selectClassName =
+  'flex h-10 w-full appearance-none rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50';
+
 export function PreferencesSettingsSection() {
   const { data: profile, isLoading: profileLoading } = useProfile();
   const { data: resumes, isLoading: resumesLoading } = useResumes();
   const { data: templates, isLoading: templatesLoading } = useTemplates();
   const updateProfile = useUpdateProfile();
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const {
     register,
@@ -51,53 +58,63 @@ export function PreferencesSettingsSection() {
   }, [profile, reset]);
 
   const onSubmit = handleSubmit(async (values) => {
-    await updateProfile.mutateAsync({
-      defaultDelaySeconds: values.defaultDelaySeconds,
-      defaultResumeId: values.defaultResumeId || null,
-      defaultTemplateId: values.defaultTemplateId || null,
-    });
+    setSaveError(null);
+    setSaved(false);
+    try {
+      await updateProfile.mutateAsync({
+        defaultDelaySeconds: values.defaultDelaySeconds,
+        defaultResumeId: values.defaultResumeId || null,
+        defaultTemplateId: values.defaultTemplateId || null,
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : 'Failed to save preferences.');
+    }
   });
 
   const loading = profileLoading || resumesLoading || templatesLoading;
+  const busy = isSubmitting || updateProfile.isPending;
 
   if (loading) {
     return (
-      <Card id="preferences">
-        <CardHeader>
-          <CardTitle>Preferences</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="h-24 w-full" />
-        </CardContent>
-      </Card>
+      <SettingsSection
+        id="preferences"
+        title="Preferences"
+        description="Defaults used by the build and send workflows."
+      >
+        <Skeleton className="h-24 w-full" />
+      </SettingsSection>
     );
   }
 
   return (
-    <Card id="preferences">
-      <CardHeader>
-        <CardTitle>Preferences</CardTitle>
-        <CardDescription>Defaults used by the build and send workflows.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="defaultDelaySeconds">Default send delay (seconds)</Label>
-            <input
-              id="defaultDelaySeconds"
-              type="number"
-              min={20}
-              max={60}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              {...register('defaultDelaySeconds')}
-            />
-          </div>
+    <SettingsSection
+      id="preferences"
+      title="Preferences"
+      description="Defaults used by the build and send workflows."
+    >
+      <form onSubmit={onSubmit} className="max-w-sm space-y-5">
+        {saveError && <Alert variant="destructive">{saveError}</Alert>}
 
-          <div className="space-y-2">
-            <Label htmlFor="defaultResumeId">Default resume</Label>
+        <div className="space-y-2">
+          <Label htmlFor="defaultDelaySeconds">Default send delay (seconds)</Label>
+          <Input
+            id="defaultDelaySeconds"
+            type="number"
+            min={20}
+            max={60}
+            {...register('defaultDelaySeconds')}
+          />
+          <p className="text-xs text-muted-foreground">Between 20 and 60 seconds.</p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="defaultResumeId">Default resume</Label>
+          <div className="relative">
             <select
               id="defaultResumeId"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              className={selectClassName}
               {...register('defaultResumeId')}
             >
               <option value="">None</option>
@@ -107,13 +124,16 @@ export function PreferencesSettingsSection() {
                 </option>
               ))}
             </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           </div>
+        </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="defaultTemplateId">Default template</Label>
+        <div className="space-y-2">
+          <Label htmlFor="defaultTemplateId">Default template</Label>
+          <div className="relative">
             <select
               id="defaultTemplateId"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              className={selectClassName}
               {...register('defaultTemplateId')}
             >
               <option value="">None</option>
@@ -123,16 +143,23 @@ export function PreferencesSettingsSection() {
                 </option>
               ))}
             </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           </div>
+        </div>
 
-          <Button type="submit" disabled={!isDirty || isSubmitting || updateProfile.isPending}>
-            {(isSubmitting || updateProfile.isPending) && (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            )}
+        <div className="flex items-center gap-3 pt-1">
+          <Button type="submit" disabled={!isDirty || busy}>
+            {busy && <Loader2 className="h-4 w-4 animate-spin" />}
             Save preferences
           </Button>
-        </form>
-      </CardContent>
-    </Card>
+          {saved && (
+            <span className="flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 className="h-4 w-4" />
+              Saved
+            </span>
+          )}
+        </div>
+      </form>
+    </SettingsSection>
   );
 }
