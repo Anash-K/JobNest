@@ -26,6 +26,7 @@ export interface JobLead {
   pipelineStatus: string;
   campaignId?: string | null;
   customFields?: Record<string, unknown>;
+  customFieldLabels?: Record<string, string>;
   campaign?: { id: string; name: string } | null;
   createdAt?: string;
   updatedAt?: string;
@@ -43,6 +44,7 @@ export interface ImportLeadRow {
   jobDescription?: string;
   notes?: string;
   customFields?: Record<string, unknown>;
+  customFieldLabels?: Record<string, string>;
 }
 
 export interface LeadImportValidation {
@@ -234,6 +236,8 @@ export const leadsApi = {
     ),
   create: (data: Partial<JobLead> & { companyName: string }) =>
     apiFetch<JobLead>('/leads', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: Partial<JobLead>) =>
+    apiFetch<JobLead>(`/leads/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   validateImport: (data: { campaignId?: string; leads: ImportLeadRow[] }) =>
     apiFetch<LeadImportValidation>('/leads/import/validate', {
       method: 'POST',

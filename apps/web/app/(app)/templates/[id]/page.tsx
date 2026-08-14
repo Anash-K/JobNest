@@ -1,15 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { extractVariables } from '@jobhunter/shared';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { TiptapEditor } from '@/components/templates/TiptapEditor';
 import { VariableMapper } from '@/components/templates/VariableMapper';
 import { templatesApi, type EmailTemplate } from '@/lib/api';
+import { matchLeadField } from '@/lib/variable-field-match';
 
 export default function TemplateEditPage() {
   const { id } = useParams<{ id: string }>();
@@ -31,6 +33,23 @@ export default function TemplateEditPage() {
     void load();
   }, [load]);
 
+  const detectedVars = useMemo(
+    () => extractVariables(template?.subject ?? '', template?.bodyHtml ?? ''),
+    [template?.subject, template?.bodyHtml],
+  );
+
+  // Auto-resolve any variable that exactly matches a lead field name, without touching
+  // variables the user (or a prior save) has already mapped explicitly.
+  const effectiveVariableMap = useMemo(() => {
+    const map = { ...(template?.variableMap ?? {}) };
+    for (const varName of detectedVars) {
+      if (map[varName]) continue;
+      const match = matchLeadField(varName, coreFields, customFields);
+      if (match) map[varName] = match;
+    }
+    return map;
+  }, [detectedVars, coreFields, customFields, template?.variableMap]);
+
   const save = () => {
     if (!template) return;
     startTransition(async () => {
@@ -39,9 +58,9 @@ export default function TemplateEditPage() {
         subject: template.subject,
         bodyHtml: template.bodyHtml,
       });
-      await templatesApi.updateVariableMap(id, template.variableMap);
+      await templatesApi.updateVariableMap(id, effectiveVariableMap);
       await templatesApi.updateDefaultValues(id, template.defaultValues);
-      setTemplate(updated);
+      setTemplate({ ...updated, variableMap: effectiveVariableMap });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     });
@@ -80,12 +99,15 @@ export default function TemplateEditPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Variable Mapping</CardTitle>
+            <CardTitle>Detected Variables</CardTitle>
+            <CardDescription>
+              {'Variables are automatically detected from {{variableName}} syntax in your subject and body.'}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <VariableMapper
-              variables={template.detectedVars}
-              variableMap={template.variableMap}
+              variables={detectedVars}
+              variableMap={effectiveVariableMap}
               defaultValues={template.defaultValues}
               coreFields={coreFields}
               customFields={customFields}

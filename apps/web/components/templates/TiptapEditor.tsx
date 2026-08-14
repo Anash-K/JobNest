@@ -34,13 +34,6 @@ export function TiptapEditor({ content, onChange, placeholder }: TiptapEditorPro
 
   if (!editor) return null;
 
-  const insertVariable = () => {
-    const name = window.prompt('Variable name (e.g. companyName):');
-    if (name?.match(/^[a-zA-Z_][a-zA-Z0-9_]*$/)) {
-      editor.chain().focus().insertContent(`{{${name}}}`).run();
-    }
-  };
-
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-1 border rounded-md p-1 bg-muted/30">
@@ -66,9 +59,6 @@ export function TiptapEditor({ content, onChange, placeholder }: TiptapEditorPro
         </Button>
         <Button type="button" variant="ghost" size="sm" onClick={() => editor.chain().focus().toggleOrderedList().run()}>
           <ListOrdered className="h-4 w-4" />
-        </Button>
-        <Button type="button" variant="outline" size="sm" onClick={insertVariable}>
-          {'{{ }}'} Variable
         </Button>
       </div>
       <EditorContent editor={editor} />

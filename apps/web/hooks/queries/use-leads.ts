@@ -11,6 +11,14 @@ export function useLeads(params?: Record<string, string>) {
   });
 }
 
+export function useLead(id: string) {
+  return useQuery({
+    queryKey: ['leads', id],
+    queryFn: () => leadsApi.get(id),
+    enabled: Boolean(id),
+  });
+}
+
 export function useCreateLead() {
   const queryClient = useQueryClient();
 
@@ -18,6 +26,19 @@ export function useCreateLead() {
     mutationFn: leadsApi.create,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['leads'] });
+    },
+  });
+}
+
+export function useUpdateLead() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<JobLead> }) =>
+      leadsApi.update(id, data),
+    onSuccess: (_result, variables) => {
+      void queryClient.invalidateQueries({ queryKey: ['leads'] });
+      void queryClient.invalidateQueries({ queryKey: ['leads', variables.id] });
     },
   });
 }

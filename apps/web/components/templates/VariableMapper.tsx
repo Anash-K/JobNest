@@ -2,6 +2,8 @@
 
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { matchLeadField } from '@/lib/variable-field-match';
 
 interface VariableMapperProps {
   variables: string[];
@@ -35,37 +37,54 @@ export function VariableMapper({
 
   return (
     <div className="space-y-4">
-      {variables.map((varName) => (
-        <div key={varName} className="grid gap-2 rounded-md border p-3 md:grid-cols-3">
-          <div>
-            <Label className="font-mono text-primary">{`{{${varName}}}`}</Label>
+      {variables.map((varName) => {
+        const currentValue = variableMap[varName] ?? '';
+        const exactMatch = matchLeadField(varName, coreFields, customFields);
+        const isAutoMatched = Boolean(exactMatch) && currentValue === exactMatch;
+        const isCustom = Boolean(currentValue) && !isAutoMatched;
+
+        return (
+          <div key={varName} className="grid gap-2 rounded-md border p-3 md:grid-cols-3">
+            <div className="flex items-center gap-2">
+              <Label className="font-mono text-primary">{`{{${varName}}}`}</Label>
+              {isAutoMatched && (
+                <Badge variant="secondary" className="text-[10px]">
+                  Auto-matched
+                </Badge>
+              )}
+              {isCustom && (
+                <Badge variant="outline" className="text-[10px]">
+                  Custom
+                </Badge>
+              )}
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Map to lead field</Label>
+              <select
+                className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={currentValue}
+                onChange={(e) => onMapChange({ ...variableMap, [varName]: e.target.value })}
+              >
+                <option value="">— select —</option>
+                {sourceOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Default fallback</Label>
+              <Input
+                className="mt-1"
+                value={defaultValues[varName] ?? ''}
+                placeholder="Optional default"
+                onChange={(e) => onDefaultChange({ ...defaultValues, [varName]: e.target.value })}
+              />
+            </div>
           </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">Map to lead field</Label>
-            <select
-              className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              value={variableMap[varName] ?? ''}
-              onChange={(e) => onMapChange({ ...variableMap, [varName]: e.target.value })}
-            >
-              <option value="">— select —</option>
-              {sourceOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">Default fallback</Label>
-            <Input
-              className="mt-1"
-              value={defaultValues[varName] ?? ''}
-              placeholder="Optional default"
-              onChange={(e) => onDefaultChange({ ...defaultValues, [varName]: e.target.value })}
-            />
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

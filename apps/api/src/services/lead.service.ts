@@ -4,6 +4,7 @@ import {
   buildPaginationMeta,
   isLeadSource,
   LEAD_SOURCE,
+  LEAD_CORE_FIELDS,
   parseListQuery,
   type LeadSource,
   type ParsedListQuery,
@@ -11,19 +12,6 @@ import {
 import { NotFoundError, ValidationError } from '../utils/errors';
 import { buildLeadSearchWhere, prismaPagination } from '../utils/search';
 import { assertCampaignOwnership } from '../utils/tenant';
-
-const CORE_FIELDS = [
-  'companyName',
-  'receiverName',
-  'receiverEmail',
-  'jobTitle',
-  'location',
-  'salary',
-  'linkedinUrl',
-  'jobUrl',
-  'jobDescription',
-  'notes',
-] as const;
 
 import type { JobLead } from '../generated/prisma/client';
 import type { TemplateLead } from '@jobhunter/shared';
@@ -76,7 +64,7 @@ export const leadService = {
 
     return {
       ...lead,
-      availableFields: { coreFields: [...CORE_FIELDS], customFields },
+      availableFields: { coreFields: [...LEAD_CORE_FIELDS], customFields },
       templateLead: toTemplateLead(lead),
     };
   },
@@ -102,6 +90,7 @@ export const leadService = {
       notes?: string;
       source?: LeadSource;
       customFields?: Record<string, unknown>;
+      customFieldLabels?: Record<string, unknown>;
     },
   ) {
     if (data.campaignId) {
@@ -124,6 +113,7 @@ export const leadService = {
         notes: data.notes,
         source: data.source ?? LEAD_SOURCE.MANUAL,
         customFields: (data.customFields ?? {}) as Prisma.InputJsonValue,
+        customFieldLabels: (data.customFieldLabels ?? {}) as Prisma.InputJsonValue,
       },
     });
   },
@@ -146,16 +136,46 @@ export const leadService = {
       pipelineStatus: string;
       source?: LeadSource;
       customFields: Record<string, unknown>;
+      customFieldLabels: Record<string, unknown>;
     }>,
   ) {
-    await this.getById(id, userId);
+    const existing = await this.getById(id, userId);
     if (data.campaignId) {
       await assertCampaignOwnership(data.campaignId, userId);
     }
     if (data.source && !isLeadSource(data.source)) {
       throw new ValidationError(`Invalid lead source: ${data.source}`);
     }
-    return prisma.jobLead.update({ where: { id }, data: data as never });
+
+    // Defense-in-depth: merge rather than blindly replace customFields, so a stale
+    // client sending a partial object can't silently wipe untouched keys. A key is
+    // only removed when the client explicitly sends it as `null` (tombstone) —
+    // omitting a key entirely always means "leave it as-is".
+    const merged = { ...data };
+    if (data.customFields !== undefined) {
+      const combined = {
+        ...((existing.customFields as Record<string, unknown>) ?? {}),
+        ...data.customFields,
+      };
+      const customFields: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(combined)) {
+        if (value !== null) customFields[key] = value;
+      }
+      merged.customFields = customFields;
+
+      // Keep labels in sync — drop labels for any key no longer present.
+      const existingLabels = (existing.customFieldLabels as Record<string, unknown>) ?? {};
+      const combinedLabels = { ...existingLabels, ...(data.customFieldLabels ?? {}) };
+      const customFieldLabels: Record<string, unknown> = {};
+      for (const key of Object.keys(customFields)) {
+        if (combinedLabels[key] !== undefined && combinedLabels[key] !== null) {
+          customFieldLabels[key] = combinedLabels[key];
+        }
+      }
+      merged.customFieldLabels = customFieldLabels;
+    }
+
+    return prisma.jobLead.update({ where: { id }, data: merged as never });
   },
 
   async delete(id: string, userId: string) {
@@ -181,6 +201,7 @@ export const leadService = {
         jobDescription?: string;
         notes?: string;
         customFields?: Record<string, unknown>;
+        customFieldLabels?: Record<string, unknown>;
       }>;
     },
   ) {
@@ -224,6 +245,7 @@ export const leadService = {
       notes: lead.notes,
       source: LEAD_SOURCE.EXCEL_IMPORT,
       customFields: (lead.customFields ?? {}) as Prisma.InputJsonValue,
+      customFieldLabels: (lead.customFieldLabels ?? {}) as Prisma.InputJsonValue,
     }));
 
     const result = await prisma.jobLead.createMany({ data: rows });
@@ -257,6 +279,7 @@ export const leadService = {
         jobDescription?: string;
         notes?: string;
         customFields?: Record<string, unknown>;
+        customFieldLabels?: Record<string, unknown>;
       }>;
     },
   ) {

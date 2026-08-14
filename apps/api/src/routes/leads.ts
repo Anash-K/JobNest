@@ -21,6 +21,7 @@ const leadFieldsSchema = z.object({
   jobDescription: z.string().optional(),
   notes: z.string().optional(),
   customFields: z.record(z.unknown()).optional(),
+  customFieldLabels: z.record(z.string()).optional(),
 });
 
 const createLeadSchema = leadFieldsSchema.extend({

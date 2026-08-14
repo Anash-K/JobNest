@@ -4,6 +4,7 @@ import {
   detectTemplateVariables,
   renderTemplate,
   resolveVariables,
+  LEAD_CORE_FIELDS,
   type DefaultValues,
   type VariableMap,
 } from '@jobhunter/shared';
@@ -143,18 +144,7 @@ export const templateService = {
     }
 
     return {
-      coreFields: [
-        'companyName',
-        'receiverName',
-        'receiverEmail',
-        'jobTitle',
-        'location',
-        'salary',
-        'linkedinUrl',
-        'jobUrl',
-        'jobDescription',
-        'notes',
-      ],
+      coreFields: [...LEAD_CORE_FIELDS],
       customFields: [...customKeys].sort(),
     };
   },

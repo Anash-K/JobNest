@@ -1,7 +1,12 @@
 import * as XLSX from 'xlsx';
+import { normalizeFieldName } from '@jobhunter/shared';
 import type { ImportLeadRow } from '@/lib/api';
 
-export type ParsedSpreadsheetRow = ImportLeadRow & { _rowNumber: number };
+export type ParsedSpreadsheetRow = ImportLeadRow & {
+  _rowNumber: number;
+  /** Original header -> cell value for this row, kept so a variable can be remapped after parsing. */
+  _raw: Record<string, string>;
+};
 
 /** Canonical column aliases → lead field keys */
 const COLUMN_MAP: Record<string, keyof ImportLeadRow | 'custom'> = {
@@ -52,20 +57,36 @@ function cellValue(value: unknown): string {
   return String(value).trim();
 }
 
-function mapRow(raw: Record<string, unknown>, headers: string[]): ParsedSpreadsheetRow | null {
+function mapRow(
+  raw: Record<string, unknown>,
+  headers: string[],
+  templateVars: string[] = [],
+): ParsedSpreadsheetRow | null {
   const mapped: Partial<ImportLeadRow> = {};
   const customFields: Record<string, unknown> = {};
+  const customFieldLabels: Record<string, string> = {};
+  const rawByHeader: Record<string, string> = {};
 
   headers.forEach((header, index) => {
     const key = normalizeHeader(header);
     if (!key) return;
     const value = cellValue(raw[`__col_${index}`]);
+    if (value) rawByHeader[header] = value;
     if (!value) return;
 
     const field = COLUMN_MAP[key];
     if (field && field !== 'custom') {
       (mapped as Record<string, string>)[field] = value;
-    } else if (!field) {
+      return;
+    }
+
+    // Not a known core-field alias — check for an exact match against the
+    // selected template's variable names before falling back to a raw-header key.
+    const varMatch = templateVars.find((varName) => normalizeFieldName(header) === varName);
+    if (varMatch) {
+      customFields[varMatch] = value;
+      customFieldLabels[varMatch] = header;
+    } else {
       customFields[header] = value;
     }
   });
@@ -84,11 +105,16 @@ function mapRow(raw: Record<string, unknown>, headers: string[]): ParsedSpreadsh
     jobDescription: mapped.jobDescription,
     notes: mapped.notes,
     customFields: Object.keys(customFields).length > 0 ? customFields : undefined,
+    customFieldLabels: Object.keys(customFieldLabels).length > 0 ? customFieldLabels : undefined,
     _rowNumber: 0,
+    _raw: rawByHeader,
   };
 }
 
-export function parseSpreadsheetFile(file: File): Promise<ParsedSpreadsheetRow[]> {
+export function parseSpreadsheetFile(
+  file: File,
+  templateVars: string[] = [],
+): Promise<ParsedSpreadsheetRow[]> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
@@ -130,7 +156,7 @@ export function parseSpreadsheetFile(file: File): Promise<ParsedSpreadsheetRow[]
             raw[`__col_${colIndex}`] = dataRow[colIndex];
           });
 
-          const parsed = mapRow(raw, headers);
+          const parsed = mapRow(raw, headers, templateVars);
           if (parsed) {
             rows.push({ ...parsed, _rowNumber: index + 2 });
           }
@@ -165,5 +191,54 @@ export function isSpreadsheetFile(file: File): boolean {
 }
 
 export function toImportPayload(rows: ParsedSpreadsheetRow[]): ImportLeadRow[] {
-  return rows.map(({ _rowNumber: _ignored, ...row }) => row);
+  return rows.map(({ _rowNumber: _ignored, _raw: _ignoredRaw, ...row }) => row);
+}
+
+/** Which of a template's detected variables are already present, across at least one parsed row. */
+export function resolvedTemplateVars(
+  rows: ParsedSpreadsheetRow[],
+  templateVars: string[],
+  coreFields: string[],
+): Set<string> {
+  const resolved = new Set<string>();
+  for (const varName of templateVars) {
+    if (coreFields.includes(varName)) {
+      resolved.add(varName);
+      continue;
+    }
+    if (rows.some((row) => String(row.customFields?.[varName] ?? '').length > 0)) {
+      resolved.add(varName);
+    }
+  }
+  return resolved;
+}
+
+/** Manually map an existing CSV column to a template variable that wasn't auto-detected. */
+export function applyColumnOverride(
+  rows: ParsedSpreadsheetRow[],
+  header: string,
+  varName: string,
+): ParsedSpreadsheetRow[] {
+  return rows.map((row) => {
+    const value = row._raw[header];
+    if (!value) return row;
+    return {
+      ...row,
+      customFields: { ...(row.customFields ?? {}), [varName]: value },
+      customFieldLabels: { ...(row.customFieldLabels ?? {}), [varName]: header },
+    };
+  });
+}
+
+/** Apply one fallback value to every row missing a given variable. */
+export function applyDefaultValue(
+  rows: ParsedSpreadsheetRow[],
+  varName: string,
+  defaultValue: string,
+): ParsedSpreadsheetRow[] {
+  if (!defaultValue) return rows;
+  return rows.map((row) => {
+    if (String(row.customFields?.[varName] ?? '').length > 0) return row;
+    return { ...row, customFields: { ...(row.customFields ?? {}), [varName]: defaultValue } };
+  });
 }

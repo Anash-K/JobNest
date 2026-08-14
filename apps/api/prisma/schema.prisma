@@ -224,6 +224,7 @@ model JobLead {
   pipelineStatus PipelineStatus @default(NEW)
   source         LeadSource     @default(MANUAL)
   customFields   Json           @default("{}")
+  customFieldLabels Json        @default("{}")
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
