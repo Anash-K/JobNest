@@ -6,7 +6,7 @@ import { X } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Alert } from '@/components/ui/alert';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
-import { SettingsNav } from '@/components/settings/SettingsNav';
+import { SettingsNav, SETTINGS_SECTIONS, type SettingsSectionId } from '@/components/settings/SettingsNav';
 import { SettingsSection } from '@/components/settings/SettingsSection';
 import { GmailOAuthPanel } from '@/components/settings/GmailOAuthPanel';
 import { ProfileSettingsSection } from '@/components/settings/ProfileSettingsSection';
@@ -23,6 +23,13 @@ function SettingsContent() {
   const { data: gmailStatus, refetch } = useGmailStatus();
   const [message, setMessage] = useState<string | null>(null);
   const [messageVariant, setMessageVariant] = useState<'success' | 'destructive'>('success');
+  const [activeTab, setActiveTab] = useState<SettingsSectionId>(() => {
+    const tab = searchParams.get('tab');
+    if (tab && SETTINGS_SECTIONS.some((section) => section.id === tab)) {
+      return tab as SettingsSectionId;
+    }
+    return searchParams.get('gmail') ? 'integrations' : 'profile';
+  });
 
   const refreshGmail = useCallback(() => {
     void refetch();
@@ -57,7 +64,7 @@ function SettingsContent() {
       />
       <div className="mx-auto max-w-[1120px] px-4 py-8 sm:px-6 lg:px-10">
         <div className="lg:grid lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-12">
-          <SettingsNav />
+          <SettingsNav active={activeTab} onChange={setActiveTab} />
 
           <div className="mt-6 min-w-0 space-y-10 lg:mt-0">
             {message && (
@@ -76,26 +83,30 @@ function SettingsContent() {
               </Alert>
             )}
 
-            <ProfileSettingsSection />
-            <SecuritySettingsSection />
+            {activeTab === 'profile' && <ProfileSettingsSection />}
+            {activeTab === 'security' && <SecuritySettingsSection />}
 
-            <GmailOAuthPanel
-              status={gmailStatus ?? null}
-              onStatusChange={refreshGmail}
-              onMessage={showMessage}
-            />
+            {activeTab === 'integrations' && (
+              <GmailOAuthPanel
+                status={gmailStatus ?? null}
+                onStatusChange={refreshGmail}
+                onMessage={showMessage}
+              />
+            )}
 
-            <PreferencesSettingsSection />
+            {activeTab === 'preferences' && <PreferencesSettingsSection />}
 
-            <SettingsSection
-              id="appearance"
-              title="Appearance"
-              description="Choose how JobNest looks on this device."
-            >
-              <ThemeToggle className="max-w-sm" />
-            </SettingsSection>
+            {activeTab === 'appearance' && (
+              <SettingsSection
+                id="appearance"
+                title="Appearance"
+                description="Choose how JobNest looks on this device."
+              >
+                <ThemeToggle className="max-w-sm" />
+              </SettingsSection>
+            )}
 
-            <SessionsSettingsSection />
+            {activeTab === 'sessions' && <SessionsSettingsSection />}
           </div>
         </div>
       </div>

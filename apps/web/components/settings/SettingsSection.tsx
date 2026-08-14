@@ -1,5 +1,3 @@
-import { cn } from '@/lib/utils';
-
 interface SettingsSectionProps {
   id: string;
   title: string;
@@ -9,10 +7,7 @@ interface SettingsSectionProps {
   className?: string;
 }
 
-/**
- * Consistent settings section shell: heading + description sit above a single
- * tightly-padded card, matching the anchor ids used by SettingsNav for scroll-spy.
- */
+/** Consistent settings section shell: heading + description sit above a single tightly-padded card. */
 export function SettingsSection({
   id,
   title,
@@ -22,7 +17,7 @@ export function SettingsSection({
   className,
 }: SettingsSectionProps) {
   return (
-    <section id={id} className={cn('scroll-mt-8', className)}>
+    <section id={id} role="tabpanel" className={className}>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold tracking-tight">{title}</h2>

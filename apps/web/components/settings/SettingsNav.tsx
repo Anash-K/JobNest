@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 
-const SECTIONS = [
+export const SETTINGS_SECTIONS = [
   { id: 'profile', label: 'Profile' },
   { id: 'security', label: 'Security' },
   { id: 'integrations', label: 'Integrations' },
@@ -12,35 +11,19 @@ const SECTIONS = [
   { id: 'sessions', label: 'Sessions' },
 ] as const;
 
-/** In-page settings navigation with scroll-spy — vertical on desktop, horizontal pills on mobile. */
-export function SettingsNav() {
-  const [active, setActive] = useState<string>(SECTIONS[0].id);
+export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number]['id'];
 
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            setActive(entry.target.id);
-            break;
-          }
-        }
-      },
-      { rootMargin: '-96px 0px -70% 0px', threshold: 0 },
-    );
+interface SettingsNavProps {
+  active: SettingsSectionId;
+  onChange: (id: SettingsSectionId) => void;
+}
 
-    for (const { id } of SECTIONS) {
-      const el = document.getElementById(id);
-      if (el) observer.observe(el);
-    }
-
-    return () => observer.disconnect();
-  }, []);
-
-  const linkClass = (id: string, mobile: boolean) =>
+/** Settings tab list — vertical on desktop, horizontal pills on mobile. Only the active tab's content is rendered. */
+export function SettingsNav({ active, onChange }: SettingsNavProps) {
+  const tabClass = (id: string, mobile: boolean) =>
     cn(
       'rounded-md text-sm font-medium transition-colors',
-      mobile ? 'shrink-0 whitespace-nowrap px-3 py-1.5' : 'block px-3 py-2',
+      mobile ? 'shrink-0 whitespace-nowrap px-3 py-1.5' : 'block w-full px-3 py-2 text-left',
       active === id
         ? 'bg-primary/10 text-primary'
         : 'text-muted-foreground hover:bg-accent hover:text-foreground',
@@ -49,29 +32,32 @@ export function SettingsNav() {
   return (
     <nav aria-label="Settings sections" className="lg:sticky lg:top-8 lg:self-start">
       <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-2 lg:hidden" role="tablist">
-        {SECTIONS.map((section) => (
-          <a
+        {SETTINGS_SECTIONS.map((section) => (
+          <button
             key={section.id}
-            href={`#${section.id}`}
+            type="button"
             role="tab"
             aria-selected={active === section.id}
-            className={linkClass(section.id, true)}
+            onClick={() => onChange(section.id)}
+            className={tabClass(section.id, true)}
           >
             {section.label}
-          </a>
+          </button>
         ))}
       </div>
 
-      <ul className="hidden flex-col gap-0.5 lg:flex">
-        {SECTIONS.map((section) => (
+      <ul className="hidden flex-col gap-0.5 lg:flex" role="tablist">
+        {SETTINGS_SECTIONS.map((section) => (
           <li key={section.id}>
-            <a
-              href={`#${section.id}`}
-              aria-current={active === section.id ? 'true' : undefined}
-              className={linkClass(section.id, false)}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={active === section.id}
+              onClick={() => onChange(section.id)}
+              className={tabClass(section.id, false)}
             >
               {section.label}
-            </a>
+            </button>
           </li>
         ))}
       </ul>

@@ -5,9 +5,11 @@ import { Sidebar } from '@/components/layout/Sidebar';
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthGuard>
-      <div className="flex min-h-screen">
+      <div className="flex h-screen overflow-hidden">
         <Sidebar />
-        <main className="flex-1 overflow-auto bg-background">{children}</main>
+        <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-background">
+          {children}
+        </main>
       </div>
     </AuthGuard>
   );

@@ -24,6 +24,11 @@ const envSchema = z.object({
     .string()
     .default('http://localhost:3000')
     .transform((val) => val.split(',').map((origin) => origin.trim())),
+  /** Single frontend origin for building redirect URLs (OAuth callbacks, etc.) — distinct from CORS_ORIGIN, which is a comma-separated allowlist. */
+  WEB_APP_URL: z
+    .string()
+    .url({ message: 'WEB_APP_URL must be a valid URL' })
+    .default('http://localhost:3000'),
   GOOGLE_CLIENT_ID: z.string().min(1, {
     message: 'GOOGLE_CLIENT_ID is required (global OAuth application)',
   }),

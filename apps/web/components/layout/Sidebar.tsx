@@ -42,7 +42,7 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="flex h-screen w-64 flex-col border-r bg-[hsl(var(--sidebar))]">
+    <aside className="flex h-full w-64 shrink-0 flex-col border-r bg-[hsl(var(--sidebar))]">
       <div className="flex h-16 items-center gap-2 border-b px-6">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">
           {APP_LOGO_LETTERS}
