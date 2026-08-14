@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -262,9 +263,9 @@ export default function BuildPage() {
                 {filteredLeads.length === 0 && (
                   <p className="text-sm text-muted-foreground">
                     No leads match.{' '}
-                    <a href="/leads" className="text-primary underline">
+                    <Link href="/leads" className="text-primary underline">
                       Add leads
-                    </a>{' '}
+                    </Link>{' '}
                     first.
                   </p>
                 )}
@@ -356,9 +357,9 @@ export default function BuildPage() {
               {resumes.length === 0 && (
                 <p className="text-sm text-amber-600">
                   No resumes uploaded.{' '}
-                  <a href="/resumes" className="underline">
+                  <Link href="/resumes" className="underline">
                     Upload a resume
-                  </a>
+                  </Link>
                 </p>
               )}
               <div className="flex gap-2">
