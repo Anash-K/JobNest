@@ -66,7 +66,7 @@ export default function BuildPage() {
   const load = useCallback(async () => {
     try {
       const [leadRes, tpls, res, camps, src] = await Promise.all([
-        leadsApi.list({ limit: '200' }),
+        leadsApi.list({ limit: '100' }),
         templatesApi.list(),
         resumesApi.list(),
         campaignsApi.list({ limit: '100' }),
