@@ -138,6 +138,7 @@ export interface GmailStatus {
   connectedAt?: string;
   valid?: boolean;
   oauthConfigured?: boolean;
+  needsReconnect?: boolean;
 }
 
 export interface GmailOAuthConfig {
@@ -209,6 +210,22 @@ export interface GeneratedEmail {
 export interface Paginated<T> {
   items: T[];
   meta: { total: number; page: number; limit: number; totalPages: number; hasMore: boolean };
+}
+
+export interface EmailReply {
+  id: string;
+  senderEmail: string;
+  senderName?: string | null;
+  recipientEmail?: string | null;
+  subject?: string | null;
+  bodyHtml?: string | null;
+  bodyPlainText?: string | null;
+  receivedAt: string;
+  isRead: boolean;
+  createdAt: string;
+  jobLead?: { id: string; companyName: string; jobTitle?: string | null } | null;
+  application?: { id: string; status: string } | null;
+  emailLog?: { id: string; subject: string; sentAt?: string | null; gmailThreadId?: string | null } | null;
 }
 
 // ─── Campaigns ───────────────────────────────────────────────────────────────
@@ -501,6 +518,18 @@ export const emailLogsApi = {
   },
   listFailed: () => apiFetch<EmailLog[]>('/email-logs/failed'),
   get: (id: string) => apiFetch<EmailLog>(`/email-logs/${id}`),
+};
+
+// ─── Replies ─────────────────────────────────────────────────────────────────
+
+export const repliesApi = {
+  list: (params?: Record<string, string>) => {
+    const qs = params ? `?${new URLSearchParams(params)}` : '';
+    return apiFetch<Paginated<EmailReply>>(`/replies${qs}`);
+  },
+  unreadCount: () => apiFetch<{ count: number }>('/replies/unread-count'),
+  get: (id: string) => apiFetch<EmailReply>(`/replies/${id}`),
+  markRead: (id: string) => apiFetch<EmailReply>(`/replies/${id}/read`, { method: 'PATCH' }),
 };
 
 // ─── Applications ────────────────────────────────────────────────────────────

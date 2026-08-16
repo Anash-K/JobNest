@@ -132,6 +132,17 @@ export function GmailOAuthPanel({ status, onStatusChange, onMessage }: GmailOAut
           </div>
         </div>
 
+        {connected && status?.needsReconnect && (
+          <Alert variant="warning">
+            Reconnect Gmail to enable reply tracking — this account was connected before reply
+            detection was added and is missing the permission needed to read replies.
+            <Button variant="outline" size="sm" className="ml-3" onClick={connect} disabled={isPending}>
+              <Link2 className="h-4 w-4" />
+              Reconnect Gmail
+            </Button>
+          </Alert>
+        )}
+
         <p className="text-xs text-muted-foreground">
           Refresh tokens are encrypted at rest; access tokens stay in memory only.
         </p>

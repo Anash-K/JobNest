@@ -15,6 +15,7 @@ const COLUMN_ACCENT: Record<PipelineStatus, string> = {
   INTERVIEW: 'border-t-orange-500',
   OFFER: 'border-t-emerald-500',
   REJECTED: 'border-t-red-500',
+  NO_RESPONSE: 'border-t-slate-500',
 };
 
 interface KanbanCardProps {

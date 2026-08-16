@@ -20,6 +20,8 @@ import { emailLogsRouter } from './routes/email-logs';
 import { applicationsRouter } from './routes/applications';
 import { analyticsRouter } from './routes/analytics';
 import { usersRouter } from './routes/users';
+import { repliesRouter } from './routes/replies';
+import { jobsRouter } from './routes/jobs';
 
 /**
  * Express application factory.
@@ -53,6 +55,8 @@ export function createApp(): express.Application {
   v1.use('/auth', authRouter);
   // OAuth callback is public — user identity comes from CSRF state, not session cookie
   v1.use('/gmail', gmailCallbackRouter);
+  // Vercel Cron trigger — authenticated via its own shared-secret middleware, not a user session
+  v1.use('/jobs', jobsRouter);
 
   // Authenticated endpoints gate
   v1.use(requireAuth);
@@ -69,6 +73,7 @@ export function createApp(): express.Application {
   v1.use('/applications', applicationsRouter);
   v1.use('/analytics', analyticsRouter);
   v1.use('/users', usersRouter);
+  v1.use('/replies', repliesRouter);
   app.use('/api/v1', v1);
 
   app.use(notFoundHandler);
