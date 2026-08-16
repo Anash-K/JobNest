@@ -182,11 +182,12 @@ async function recordSendSuccess(
   draft: GeneratedEmail,
   emailLogId: string,
   gmailMessageId: string,
+  gmailThreadId: string,
 ): Promise<void> {
   await prisma.$transaction([
     prisma.emailLog.update({
       where: { id: emailLogId },
-      data: { status: 'SENT', gmailMessageId, sentAt: new Date() },
+      data: { status: 'SENT', gmailMessageId, gmailThreadId, sentAt: new Date() },
     }),
     prisma.generatedEmail.update({
       where: { id: draft.id },
@@ -495,15 +496,18 @@ export const bulkSendService = {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       attemptsUsed = attempt + 1;
       try {
-        const gmailMessageId = await gmailService.sendMessage(userId, {
-          to: draft.recipientEmail,
-          subject: draft.subject,
-          bodyHtml: draft.bodyHtml,
-          bodyPlainText: draft.bodyPlainText ?? '',
-          resumeId: draft.resumeId,
-        });
+        const { messageId: gmailMessageId, threadId: gmailThreadId } = await gmailService.sendMessage(
+          userId,
+          {
+            to: draft.recipientEmail,
+            subject: draft.subject,
+            bodyHtml: draft.bodyHtml,
+            bodyPlainText: draft.bodyPlainText ?? '',
+            resumeId: draft.resumeId,
+          },
+        );
 
-        await recordSendSuccess(userId, draft, emailLog.id, gmailMessageId);
+        await recordSendSuccess(userId, draft, emailLog.id, gmailMessageId, gmailThreadId);
         success = true;
         break;
       } catch (err) {

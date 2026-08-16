@@ -15,6 +15,7 @@ import {
   YAxis,
 } from 'recharts';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { RepliesSection } from '@/components/dashboard/RepliesSection';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -40,6 +41,7 @@ const PIPELINE_COLORS: Record<string, string> = {
   INTERVIEW: '#f97316',
   OFFER: '#10b981',
   REJECTED: '#ef4444',
+  NO_RESPONSE: '#64748b',
 };
 
 const FUNNEL_COLORS = ['#6366f1', '#8b5cf6', '#22c55e', '#ef4444'];
@@ -203,6 +205,8 @@ export default function DashboardPage() {
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
+
+        <RepliesSection />
 
         {summary && (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">

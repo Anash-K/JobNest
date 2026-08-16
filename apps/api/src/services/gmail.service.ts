@@ -9,8 +9,12 @@ import { ValidationError } from '../utils/errors';
 
 const OAUTH_SCOPES = [
   'https://www.googleapis.com/auth/gmail.send',
+  'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/userinfo.email',
 ].join(' ');
+
+/** Scope required for reply-tracking sync — connect-time accounts predating this feature lack it. */
+export const GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
@@ -108,6 +112,7 @@ export const gmailService = {
         email: googleUser.email,
         encryptedRefreshToken: encrypt(tokens.refresh_token),
         scopes: OAUTH_SCOPES,
+        needsReconnect: false,
       },
     });
 
@@ -133,6 +138,7 @@ export const gmailService = {
       email: account.email,
       connectedAt: account.connectedAt,
       oauthConfigured: oauthConfig.configured,
+      needsReconnect: account.needsReconnect,
     };
   },
 
@@ -245,7 +251,7 @@ export const gmailService = {
       bodyPlainText: string;
       resumeId: string;
     },
-  ): Promise<string> {
+  ): Promise<{ messageId: string; threadId: string }> {
     const account = await this.getAccount(userId);
     if (!account) {
       throw gmailError('Gmail is not connected', 'GMAIL_NOT_CONNECTED');
@@ -295,7 +301,7 @@ export const gmailService = {
       throw gmailError(`Gmail send failed: ${err}`, 'NETWORK_ERROR', err);
     }
 
-    const data = (await res.json()) as { id: string };
-    return data.id;
+    const data = (await res.json()) as { id: string; threadId: string };
+    return { messageId: data.id, threadId: data.threadId };
   },
 };

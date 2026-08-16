@@ -45,6 +45,9 @@ export const queryKeys = {
   pipeline: (params?: Record<string, string>) => ['pipeline', params] as const,
   applications: (params?: Record<string, string>) => ['applications', params] as const,
   emailLogs: (params?: Record<string, string>) => ['email-logs', params] as const,
+  replies: (params?: Record<string, string>) => ['replies', params] as const,
+  reply: (id: string) => ['replies', id] as const,
+  repliesUnreadCount: ['replies', 'unread-count'] as const,
   gmailStatus: ['gmail', 'status'] as const,
   gmailOAuthConfig: ['gmail', 'oauth-config'] as const,
   analytics: {

@@ -10,6 +10,7 @@ export const PIPELINE_STATUS = {
   INTERVIEW: 'INTERVIEW',
   REJECTED: 'REJECTED',
   OFFER: 'OFFER',
+  NO_RESPONSE: 'NO_RESPONSE',
 } as const;
 
 export type PipelineStatus = (typeof PIPELINE_STATUS)[keyof typeof PIPELINE_STATUS];
@@ -25,7 +26,11 @@ export const PIPELINE_STATUS_ORDER: readonly PipelineStatus[] = [
   PIPELINE_STATUS.REJECTED,
 ] as const;
 
-/** Human-readable labels for UI badges and Kanban headers. */
+/**
+ * Human-readable labels for UI badges and Kanban headers.
+ * NO_RESPONSE is intentionally absent from PIPELINE_STATUS_ORDER — it's a system-owned
+ * terminal state set by the reply-tracking sync, not a manual Kanban column.
+ */
 export const PIPELINE_STATUS_LABELS: Record<PipelineStatus, string> = {
   [PIPELINE_STATUS.NEW]: 'New',
   [PIPELINE_STATUS.READY_TO_APPLY]: 'Ready to Apply',
@@ -34,6 +39,7 @@ export const PIPELINE_STATUS_LABELS: Record<PipelineStatus, string> = {
   [PIPELINE_STATUS.INTERVIEW]: 'Interview',
   [PIPELINE_STATUS.REJECTED]: 'Rejected',
   [PIPELINE_STATUS.OFFER]: 'Offer',
+  [PIPELINE_STATUS.NO_RESPONSE]: 'No Response',
 };
 
 /** Runtime guard — O(1) lookup via Set for request validation. */

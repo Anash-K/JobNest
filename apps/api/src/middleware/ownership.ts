@@ -11,7 +11,8 @@ type OwnableResource =
   | 'resume'
   | 'generatedEmail'
   | 'application'
-  | 'emailLog';
+  | 'emailLog'
+  | 'emailReply';
 
 const RESOURCE_LABELS: Record<OwnableResource, string> = {
   campaign: 'Campaign',
@@ -21,6 +22,7 @@ const RESOURCE_LABELS: Record<OwnableResource, string> = {
   generatedEmail: 'Generated email',
   application: 'Application',
   emailLog: 'Email log',
+  emailReply: 'Reply',
 };
 
 async function findResourceUserId(
@@ -54,6 +56,10 @@ async function findResourceUserId(
     }
     case 'emailLog': {
       const row = await prisma.emailLog.findUnique({ where: { id }, select: { userId: true } });
+      return row?.userId ?? null;
+    }
+    case 'emailReply': {
+      const row = await prisma.emailReply.findUnique({ where: { id }, select: { userId: true } });
       return row?.userId ?? null;
     }
     default: {
