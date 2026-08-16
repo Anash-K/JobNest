@@ -1,3 +1,6 @@
+/** Production site URL — used for SEO metadata (sitemap, robots). */
+export const SITE_URL = 'https://job-nest-web-beta.vercel.app';
+
 /** Application branding — UI only; package scopes remain @jobhunter/*. */
 export const APP_NAME = 'JobNest';
 export const APP_TAGLINE = 'Outreach CRM';
