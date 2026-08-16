@@ -10,6 +10,9 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: `${APP_NAME} — ${APP_TAGLINE}`,
   description: 'Multi-tenant job outreach CRM for leads, email drafts, and pipeline tracking',
+  verification: {
+    google: 'QueE5utnXCDsb82NnvkhcQuCcwBwG3g_PZKqiNWuPmc',
+  },
 };
 
 export default function RootLayout({
