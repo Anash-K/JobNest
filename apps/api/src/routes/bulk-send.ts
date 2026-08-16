@@ -12,7 +12,7 @@ const sendSchema = z.object({
   generatedEmailIds: z.array(z.string().cuid()).optional(),
   buildBatchId: z.string().uuid().optional(),
   sendAllApproved: z.boolean().optional(),
-  delaySeconds: z.number().int().min(20).max(60).optional(),
+  delaySeconds: z.number().int().min(5).max(60).optional(),
 });
 
 router.post(

@@ -49,7 +49,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * The inter-send delay (20-60s) is where a cancellation request will almost always land —
+ * The inter-send delay (5-60s) is where a cancellation request will almost always land —
  * actual Gmail round-trips are fast by comparison. Sleeping in 1s slices and re-checking
  * `progress.status` lets a stop request take effect within ~1s instead of waiting out the
  * rest of the delay.

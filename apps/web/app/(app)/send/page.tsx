@@ -335,7 +335,7 @@ function SendPageContent() {
                 <Label>Delay between sends (seconds)</Label>
                 <Input
                   type="number"
-                  min={20}
+                  min={5}
                   max={60}
                   value={delaySeconds}
                   onChange={(e) => setDelaySeconds(Number(e.target.value))}
