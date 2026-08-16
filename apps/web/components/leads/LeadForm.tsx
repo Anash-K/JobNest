@@ -9,15 +9,21 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { useCampaigns, useCreateCampaign } from '@/hooks/queries/use-campaigns';
 import { templatesApi, type EmailTemplate, type JobLead } from '@/lib/api';
 import { matchLeadField } from '@/lib/variable-field-match';
+import { LeadAutofillSearch } from '@/components/leads/LeadAutofillSearch';
+import {
+  applyLeadAutofill,
+  humanizeKey,
+  type AutofillMode,
+  type CoreFieldState,
+} from '@/lib/lead-autofill';
 
 /** Always-visible core fields — shown regardless of template selection. */
 const PRIMARY_CORE_FIELDS = ['companyName', 'receiverName', 'receiverEmail', 'jobTitle', 'location', 'salary'] as const;
 const MULTILINE_CORE_FIELDS = new Set(['jobDescription', 'notes']);
-
-type CoreFieldState = Record<(typeof LEAD_CORE_FIELDS)[number] | 'campaignId', string>;
 
 function emptyCoreState(): CoreFieldState {
   return {
@@ -33,11 +39,6 @@ function emptyCoreState(): CoreFieldState {
     notes: '',
     campaignId: '',
   };
-}
-
-function humanizeKey(key: string): string {
-  const spaced = key.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
 function stringifyCustomFields(fields?: Record<string, unknown>): Record<string, string> {
@@ -108,6 +109,9 @@ export function LeadForm({ mode, initialLead, onSubmit, submitting, submitLabel 
   );
   const [deletedKeys, setDeletedKeys] = useState<Set<string>>(new Set());
 
+  const [autofillSource, setAutofillSource] = useState<JobLead | null>(null);
+  const [autofillMode, setAutofillMode] = useState<AutofillMode>('missing');
+
   const [newFieldName, setNewFieldName] = useState('');
   const [newFieldValue, setNewFieldValue] = useState('');
   const [newFieldError, setNewFieldError] = useState<string | null>(null);
@@ -161,6 +165,34 @@ export function LeadForm({ mode, initialLead, onSubmit, submitting, submitLabel 
       for (const varName of template.detectedVars) next.delete(varName);
       return next;
     });
+  };
+
+  const applyAutofillPatch = (source: JobLead, targetMode: AutofillMode) => {
+    const patch = applyLeadAutofill(source, { core, customFields, customFieldLabels }, targetMode);
+    setCore(patch.core);
+    setCustomFields(patch.customFields);
+    setCustomFieldLabels(patch.customFieldLabels);
+    if (patch.revealedCoreFields.size > 0) {
+      setExtraCoreVisible((prev) => new Set([...prev, ...patch.revealedCoreFields]));
+    }
+    setDeletedKeys((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Set(prev);
+      for (const key of Object.keys(patch.customFields)) next.delete(key);
+      return next;
+    });
+  };
+
+  const handleSelectAutofillLead = (lead: JobLead) => {
+    setAutofillSource(lead);
+    applyAutofillPatch(lead, autofillMode);
+  };
+
+  const handleClearAutofillLead = () => setAutofillSource(null);
+
+  const handleAutofillModeChange = (nextMode: AutofillMode) => {
+    setAutofillMode(nextMode);
+    if (autofillSource) applyAutofillPatch(autofillSource, nextMode);
   };
 
   const visibleCoreFields = useMemo(
@@ -264,6 +296,18 @@ export function LeadForm({ mode, initialLead, onSubmit, submitting, submitLabel 
           </Button>
         </CardHeader>
         <CardContent className="space-y-3">
+          {mode === 'create' && (
+            <>
+              <LeadAutofillSearch
+                selectedLead={autofillSource}
+                onSelect={handleSelectAutofillLead}
+                onClear={handleClearAutofillLead}
+                mode={autofillMode}
+                onModeChange={handleAutofillModeChange}
+              />
+              <Separator />
+            </>
+          )}
           <div>
             <Label>Company *</Label>
             <Input

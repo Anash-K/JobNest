@@ -55,7 +55,9 @@ export interface LeadBuildPreview {
 }
 
 async function loadBuildContext(input: BuildEmailsInput) {
-  if (input.leadIds.length === 0) {
+  const leadIds = [...new Set(input.leadIds)];
+
+  if (leadIds.length === 0) {
     throw new ValidationError('At least one lead is required');
   }
 
@@ -66,10 +68,10 @@ async function loadBuildContext(input: BuildEmailsInput) {
   const [template, resume, leads] = await Promise.all([
     templateService.getById(input.templateId, input.userId),
     resumeService.resolveResumeId(input.userId, input.resumeId),
-    leadService.getManyByIds(input.leadIds, input.userId),
+    leadService.getManyByIds(leadIds, input.userId),
   ]);
 
-  if (leads.length !== input.leadIds.length) {
+  if (leads.length !== leadIds.length) {
     throw new ValidationError('One or more lead IDs were not found');
   }
 
