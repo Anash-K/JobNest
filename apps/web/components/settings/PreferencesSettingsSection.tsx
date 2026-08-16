@@ -15,7 +15,7 @@ import { useProfile, useUpdateProfile } from '@/hooks/queries/use-profile';
 import { useResumes, useTemplates } from '@/hooks/queries/use-settings-data';
 
 const preferencesSchema = z.object({
-  defaultDelaySeconds: z.coerce.number().int().min(20).max(60),
+  defaultDelaySeconds: z.coerce.number().int().min(5).max(60),
   defaultResumeId: z.string().optional(),
   defaultTemplateId: z.string().optional(),
 });
@@ -102,11 +102,11 @@ export function PreferencesSettingsSection() {
           <Input
             id="defaultDelaySeconds"
             type="number"
-            min={20}
+            min={5}
             max={60}
             {...register('defaultDelaySeconds')}
           />
-          <p className="text-xs text-muted-foreground">Between 20 and 60 seconds.</p>
+          <p className="text-xs text-muted-foreground">Between 5 and 60 seconds.</p>
         </div>
 
         <div className="space-y-2">

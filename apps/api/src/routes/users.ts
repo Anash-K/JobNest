@@ -10,7 +10,7 @@ const router: Router = Router();
 const updateProfileSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   image: z.string().url().nullable().optional(),
-  defaultDelaySeconds: z.number().int().min(20).max(60).optional(),
+  defaultDelaySeconds: z.number().int().min(5).max(60).optional(),
   defaultResumeId: z.string().cuid().nullable().optional(),
   defaultTemplateId: z.string().cuid().nullable().optional(),
 });

@@ -54,8 +54,8 @@ export const userService = {
     },
   ) {
     if (data.defaultDelaySeconds !== undefined) {
-      if (data.defaultDelaySeconds < 20 || data.defaultDelaySeconds > 60) {
-        throw new ValidationError('Default delay must be between 20 and 60 seconds');
+      if (data.defaultDelaySeconds < 5 || data.defaultDelaySeconds > 60) {
+        throw new ValidationError('Default delay must be between 5 and 60 seconds');
       }
     }
 

@@ -60,7 +60,7 @@ const envSchema = z.object({
   }),
   SUPABASE_RESUME_BUCKET: z.string().default('jobnest-resumes'),
   MAX_RESUME_SIZE_MB: z.coerce.number().int().positive().default(4),
-  BULK_SEND_DELAY_SECONDS: z.coerce.number().int().min(20).max(60).default(25),
+  BULK_SEND_DELAY_SECONDS: z.coerce.number().int().min(5).max(60).default(25),
   BULK_SEND_MAX_RETRIES: z.coerce.number().int().min(0).max(10).default(3),
   BULK_SEND_DAILY_WARN_THRESHOLD: z.coerce.number().int().positive().default(400),
   /** Hard ceiling on any single outbound request to Google's OAuth/Gmail APIs, so a hung
