@@ -17,7 +17,7 @@ import {
   type BulkSendProgress,
   type GeneratedEmail,
 } from '@/lib/api';
-import { Mail, RotateCcw, Send } from 'lucide-react';
+import { Mail, RotateCcw, Send, StopCircle } from 'lucide-react';
 
 import { ACTIVE_BULK_SEND_KEY } from '@/lib/constants/app';
 
@@ -40,12 +40,21 @@ function SendPageContent() {
     dailySentCount: number;
     dailyWarning: boolean;
     dailyThreshold: number;
+    duplicateLeadsSkipped: number;
   } | null>(null);
   const [progress, setProgress] = useState<BulkSendProgress | null>(null);
   const [activeBulkSendId, setActiveBulkSendId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Belt-and-suspenders guard against a double-click firing two send requests before
+  // `isPending` flips — the backend's atomic claim is the real duplicate protection,
+  // this just avoids sending two redundant requests from one accidental double-click.
+  const sendInFlightRef = useRef(false);
+  // Flips the "Stop Sending" button to "Stopping…" the instant it's clicked, without
+  // waiting for the next 2s poll tick to confirm — the actual cancellation guarantee comes
+  // from the backend's BulkSend status, this is purely a responsive UI state.
+  const [stopRequested, setStopRequested] = useState(false);
 
   const sendAllApproved = Boolean(buildBatchIdParam);
 
@@ -91,7 +100,7 @@ function SendPageContent() {
         try {
           const status = await bulkSendApi.getStatus(bulkSendId);
           setProgress(status);
-          if (status.status === 'completed') {
+          if (status.status === 'completed' || status.status === 'cancelled') {
             stopPolling();
             sessionStorage.removeItem(ACTIVE_BULK_SEND_KEY);
             await load();
@@ -149,6 +158,10 @@ function SendPageContent() {
   };
 
   const send = () => {
+    if (sendInFlightRef.current) return;
+    sendInFlightRef.current = true;
+    setStopRequested(false);
+
     startTransition(async () => {
       try {
         setError(null);
@@ -161,6 +174,24 @@ function SendPageContent() {
         pollProgress(result.bulkSendId);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Send failed');
+      } finally {
+        sendInFlightRef.current = false;
+      }
+    });
+  };
+
+  const cancelSend = () => {
+    if (!activeBulkSendId || stopRequested) return;
+    setStopRequested(true);
+
+    startTransition(async () => {
+      try {
+        setError(null);
+        const result = await bulkSendApi.cancel(activeBulkSendId);
+        setProgress(result);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to stop sending');
+        setStopRequested(false);
       }
     });
   };
@@ -180,7 +211,7 @@ function SendPageContent() {
 
   const progressPct =
     progress && progress.total > 0
-      ? Math.round(((progress.sent + progress.failed) / progress.total) * 100)
+      ? Math.round(((progress.sent + progress.failed + progress.skipped) / progress.total) * 100)
       : 0;
 
   if (loading) {
@@ -287,6 +318,13 @@ function SendPageContent() {
               <p className="text-sm text-muted-foreground">
                 Sent today: {validation.dailySentCount} / {validation.dailyThreshold}
               </p>
+              {validation.duplicateLeadsSkipped > 0 && (
+                <p className="text-sm text-amber-600 dark:text-amber-400">
+                  {validation.duplicateLeadsSkipped} duplicate lead
+                  {validation.duplicateLeadsSkipped !== 1 ? 's were' : ' was'} already in this
+                  selection and will be sent only once.
+                </p>
+              )}
               {validation.dailyWarning && (
                 <p className="text-sm text-amber-600 dark:text-amber-400">
                   This batch may exceed the recommended daily send threshold. Gmail may rate-limit
@@ -321,9 +359,27 @@ function SendPageContent() {
         {step === 3 && progress && (
           <Card>
             <CardHeader>
-              <CardTitle>
-                {progress.status === 'completed' ? 'Send Complete' : 'Sending…'}
-              </CardTitle>
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle>
+                  {progress.status === 'completed' && 'Send Complete'}
+                  {progress.status === 'cancelled' && 'Sending Stopped'}
+                  {progress.status === 'cancelling' && 'Stopping…'}
+                  {(progress.status === 'running' || progress.status === 'queued') && 'Sending…'}
+                </CardTitle>
+                {(progress.status === 'running' || progress.status === 'cancelling') && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={cancelSend}
+                    disabled={isPending || stopRequested || progress.status === 'cancelling'}
+                  >
+                    <StopCircle className="mr-2 h-4 w-4" />
+                    {stopRequested || progress.status === 'cancelling'
+                      ? 'Stopping…'
+                      : 'Stop Sending'}
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
@@ -335,7 +391,14 @@ function SendPageContent() {
               <div className="flex flex-wrap gap-3 text-sm">
                 <Badge variant="success">Sent: {progress.sent}</Badge>
                 <Badge variant="destructive">Failed: {progress.failed}</Badge>
-                <Badge variant="outline">Pending: {progress.pending}</Badge>
+                {progress.skipped > 0 && (
+                  <Badge variant="outline">Already sent: {progress.skipped}</Badge>
+                )}
+                <Badge variant="outline">
+                  {progress.status === 'cancelled' || progress.status === 'cancelling'
+                    ? `Not processed: ${progress.pending}`
+                    : `Pending: ${progress.pending}`}
+                </Badge>
                 <Badge variant="secondary">Total: {progress.total}</Badge>
               </div>
               {progress.currentEmail && (
@@ -343,6 +406,20 @@ function SendPageContent() {
                   Sending to {progress.currentEmail}
                   {progress.currentCompany ? ` (${progress.currentCompany})` : ''}…
                 </p>
+              )}
+              {progress.skippedDetails.length > 0 && (
+                <div className="rounded-md border border-muted-foreground/20 bg-muted/40 p-3">
+                  <p className="mb-2 text-sm font-medium">Skipped — already contacted</p>
+                  <ul className="max-h-32 space-y-1 overflow-y-auto text-xs text-muted-foreground">
+                    {progress.skippedDetails.map((s) => (
+                      <li key={s.generatedEmailId}>
+                        {s.reason === 'ALREADY_SENT'
+                          ? 'This lead already has an email sent for this campaign/template.'
+                          : 'A send for this lead was already in progress.'}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
               {progress.errors.length > 0 && (
                 <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3">
@@ -356,7 +433,7 @@ function SendPageContent() {
                   </ul>
                 </div>
               )}
-              {progress.status === 'completed' && (
+              {(progress.status === 'completed' || progress.status === 'cancelled') && (
                 <div className="flex flex-wrap gap-2">
                   {progress.failed > 0 && (
                     <Button onClick={retryFailed} disabled={isPending}>

@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma';
+import { env } from '../config/env';
 import { gmailAccessTokenCache } from '../lib/gmail-access-token-cache';
 import { gmailOAuthState } from '../lib/gmail-oauth-state';
 import { encrypt, decrypt } from '../utils/encryption';
@@ -32,6 +33,30 @@ interface TokenResponse {
 
 function gmailError(message: string, code: string, details?: unknown): ValidationError {
   return new ValidationError(message, { code, ...(details !== undefined ? { details } : {}) });
+}
+
+/**
+ * Every outbound call to Google (OAuth token endpoint, userinfo, Gmail send) goes through
+ * this instead of bare `fetch`. Node's fetch has no default timeout — a stalled connection
+ * to Google would otherwise hang the awaiting caller forever, which is what let one bulk-send
+ * lead get stuck claimed (EmailLog row in SENDING) while never reaching SENT or FAILED and
+ * blocking the rest of the sequential queue behind it.
+ */
+async function fetchGmail(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, { ...init, signal: AbortSignal.timeout(env.GMAIL_REQUEST_TIMEOUT_MS) });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'TimeoutError') {
+      throw gmailError(
+        `Gmail request timed out after ${env.GMAIL_REQUEST_TIMEOUT_MS}ms`,
+        'TIMEOUT',
+      );
+    }
+    throw gmailError(
+      `Gmail request failed: ${err instanceof Error ? err.message : 'network error'}`,
+      'NETWORK_ERROR',
+    );
+  }
 }
 
 async function parseTokenResponse(res: Response): Promise<TokenResponse> {
@@ -70,7 +95,7 @@ export const gmailService = {
     const userId = gmailOAuthState.consume(state);
     const config = googleOAuthConfigService.requireCredentials();
 
-    const tokenRes = await fetch(TOKEN_URL, {
+    const tokenRes = await fetchGmail(TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -90,7 +115,7 @@ export const gmailService = {
       );
     }
 
-    const userRes = await fetch(USERINFO_URL, {
+    const userRes = await fetchGmail(USERINFO_URL, {
       headers: { Authorization: `Bearer ${tokens.access_token}` },
     });
 
@@ -175,7 +200,7 @@ export const gmailService = {
       );
     }
 
-    const tokenRes = await fetch(TOKEN_URL, {
+    const tokenRes = await fetchGmail(TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -215,7 +240,7 @@ export const gmailService = {
 
     try {
       const token = await this.getValidAccessToken(userId);
-      const res = await fetch(USERINFO_URL, {
+      const res = await fetchGmail(USERINFO_URL, {
         headers: { Authorization: `Bearer ${token}` },
       });
       return { connected: true, email: account.email, valid: res.ok };
@@ -229,7 +254,7 @@ export const gmailService = {
     if (account) {
       try {
         const refreshToken = decrypt(account.encryptedRefreshToken);
-        await fetch(`${REVOKE_URL}?token=${encodeURIComponent(refreshToken)}`, {
+        await fetchGmail(`${REVOKE_URL}?token=${encodeURIComponent(refreshToken)}`, {
           method: 'POST',
         });
       } catch {
@@ -272,7 +297,7 @@ export const gmailService = {
     const payload = JSON.stringify({ raw: encodeMimeForGmail(mime) });
 
     const attemptSend = async (accessToken: string): Promise<Response> =>
-      fetch(GMAIL_SEND_URL, {
+      fetchGmail(GMAIL_SEND_URL, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,

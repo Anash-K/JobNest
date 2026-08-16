@@ -41,6 +41,13 @@ enum GeneratedEmailStatus {
   FAILED
 }
 
+enum BulkSendStatus {
+  RUNNING
+  CANCELLING
+  COMPLETED
+  CANCELLED
+}
+
 enum EmailFailureReason {
   INVALID_EMAIL
   GMAIL_LIMIT
@@ -92,6 +99,7 @@ model User {
   emailLogs        EmailLog[]
   emailReplies     EmailReply[]
   gmailAccount     GmailAccount?
+  bulkSends        BulkSend[]
 
   @@map("user")
 }
@@ -335,6 +343,25 @@ model Application {
   @@index([userId, appliedDate])
 }
 
+// Tracks the lifecycle of one bulk-send operation (the same id used as EmailLog.bulkSendId)
+// so cancellation can be requested and observed from a separate HTTP request than the one
+// that started the send. Not a FK to EmailLog — EmailLog.bulkSendId predates this model and
+// old rows have no corresponding BulkSend row.
+model BulkSend {
+  id          String         @id
+  userId      String
+  status      BulkSendStatus @default(RUNNING)
+  total       Int
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  completedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, status])
+}
+
 model EmailLog {
   id               String              @id @default(cuid())
   userId           String
@@ -373,6 +400,14 @@ model EmailLog {
   @@index([userId, createdAt])
   @@index([userId, gmailThreadId])
   @@index([userId, status, sentAt])
+  // One logical outreach (user + lead + template + campaign) may have at most one
+  // in-flight or completed send, even across multiple GeneratedEmail drafts for the
+  // same lead. Enforced via a partial unique index — see migration
+  // `email_log_outreach_dedupe` — because Prisma's schema language cannot express a
+  // filtered/expression unique index directly:
+  //   CREATE UNIQUE INDEX ON "EmailLog" (userId, jobLeadId, COALESCE(templateId, ''), COALESCE(campaignId, ''))
+  //   WHERE status IN ('SENDING', 'SENT') AND jobLeadId IS NOT NULL
+  @@index([userId, jobLeadId, templateId, campaignId])
 }
 
 model EmailReply {

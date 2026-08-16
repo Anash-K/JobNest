@@ -52,4 +52,15 @@ router.post(
   }),
 );
 
+router.post(
+  '/:bulkSendId/cancel',
+  asyncHandler(async (req, res) => {
+    const result = await bulkSendService.cancelBulkSend(
+      req.user!.id,
+      paramId(req.params.bulkSendId),
+    );
+    res.json(ok(result));
+  }),
+);
+
 export const bulkSendRouter = router;

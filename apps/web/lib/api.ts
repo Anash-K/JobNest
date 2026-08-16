@@ -152,16 +152,22 @@ export interface GmailOAuthConfig {
 
 export interface BulkSendProgress {
   bulkSendId: string;
-  status: 'queued' | 'running' | 'completed';
+  status: 'queued' | 'running' | 'cancelling' | 'completed' | 'cancelled';
   total: number;
   sent: number;
   failed: number;
+  skipped: number;
   pending: number;
   currentEmail?: string;
   currentCompany?: string;
   startedAt: string;
   completedAt?: string;
   errors: Array<{ generatedEmailId: string; message: string }>;
+  skippedDetails: Array<{
+    generatedEmailId: string;
+    leadId: string;
+    reason: 'ALREADY_SENT' | 'SEND_IN_PROGRESS';
+  }>;
 }
 
 export interface Resume {
@@ -486,6 +492,7 @@ export const bulkSendApi = {
       dailySentCount: number;
       dailyWarning: boolean;
       dailyThreshold: number;
+      duplicateLeadsSkipped: number;
     }>('/bulk-send/validate', { method: 'POST', body: JSON.stringify(data) }),
 
   start: (data: {
@@ -507,6 +514,9 @@ export const bulkSendApi = {
       `/bulk-send/${bulkSendId}/retry-failed`,
       { method: 'POST' },
     ),
+
+  cancel: (bulkSendId: string) =>
+    apiFetch<BulkSendProgress>(`/bulk-send/${bulkSendId}/cancel`, { method: 'POST' }),
 };
 
 // ─── Email Logs ──────────────────────────────────────────────────────────────

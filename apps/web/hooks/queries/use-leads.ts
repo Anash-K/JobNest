@@ -4,10 +4,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-client';
 import { leadsApi, type ImportLeadRow, type JobLead } from '@/lib/api';
 
-export function useLeads(params?: Record<string, string>) {
+export function useLeads(params?: Record<string, string>, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.leads(params),
     queryFn: () => leadsApi.list(params),
+    enabled: options?.enabled,
   });
 }
 

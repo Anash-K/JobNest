@@ -63,6 +63,9 @@ const envSchema = z.object({
   BULK_SEND_DELAY_SECONDS: z.coerce.number().int().min(20).max(60).default(25),
   BULK_SEND_MAX_RETRIES: z.coerce.number().int().min(0).max(10).default(3),
   BULK_SEND_DAILY_WARN_THRESHOLD: z.coerce.number().int().positive().default(400),
+  /** Hard ceiling on any single outbound request to Google's OAuth/Gmail APIs, so a hung
+   * connection can never block the bulk-send queue forever. */
+  GMAIL_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
   /** Shared secret authenticating the Vercel Cron trigger for the Gmail reply-sync job. */
   CRON_SECRET: z.string().min(16).optional(),
 });
