@@ -146,7 +146,7 @@ export const resumeService = {
     // 2. Upload to Supabase
     const { error: uploadError } = await supabase.storage
       .from(env.SUPABASE_RESUME_BUCKET)
-      .upload(objectKey, file.buffer, {
+      .upload(objectKey, new Blob([new Uint8Array(file.buffer)], { type: 'application/pdf' }), {
         contentType: 'application/pdf',
         upsert: false, // Prevent accidental overwrite
       });
@@ -234,7 +234,7 @@ export const resumeService = {
     // 2. Upload to Supabase
     const { error: uploadError } = await supabase.storage
       .from(env.SUPABASE_RESUME_BUCKET)
-      .upload(objectKey, file.buffer, {
+      .upload(objectKey, new Blob([new Uint8Array(file.buffer)], { type: 'application/pdf' }), {
         contentType: 'application/pdf',
         upsert: false,
       });
