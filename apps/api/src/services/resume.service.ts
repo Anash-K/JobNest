@@ -154,6 +154,7 @@ export const resumeService = {
     if (uploadError) {
       // Rollback database record
       await prisma.resume.delete({ where: { id: created.id } }).catch(() => {});
+      console.error('[SUPABASE_UPLOAD_ERROR]', uploadError, (uploadError as any).cause || 'No cause provided');
       throw new ExternalServiceError(`Failed to upload resume: ${uploadError.message}`);
     }
 
@@ -241,6 +242,7 @@ export const resumeService = {
 
     if (uploadError) {
       await prisma.resume.delete({ where: { id: created.id } }).catch(() => {});
+      console.error('[SUPABASE_UPLOAD_ERROR]', uploadError, (uploadError as any).cause || 'No cause provided');
       throw new ExternalServiceError(`Failed to upload resume: ${uploadError.message}`);
     }
 
