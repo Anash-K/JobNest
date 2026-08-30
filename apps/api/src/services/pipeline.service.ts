@@ -85,6 +85,7 @@ export const pipelineService = {
     ) as Record<PipelineStatus, number>;
 
     for (const lead of leads) {
+      if (!columns[lead.pipelineStatus]) continue;
       const card = toCard(lead);
       columns[lead.pipelineStatus].push(card);
       counts[lead.pipelineStatus]++;
